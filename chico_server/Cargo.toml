@@ -11,3 +11,8 @@ documentation.workspace = true
 
 [lints]
 workspace = true
+
+[features]
+# Treat warnings as a build error.
+strict = []
+default = ["strict"] 
