@@ -1,0 +1,13 @@
+[workspace]
+members = ["chico_file","chico_server","chico_cli",]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+authors = ["Alireza Baloochi"]
+description = "Chico is fast web server and load balancer"
+documentation = "https://example.com/bar"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"

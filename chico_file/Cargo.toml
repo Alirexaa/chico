@@ -1,0 +1,13 @@
+[package]
+name = "chico_file"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+
+
+[dependencies]
+
+[lints]
+workspace = true
