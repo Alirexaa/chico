@@ -8,6 +8,7 @@ documentation.workspace = true
 
 
 [dependencies]
+chico_file = { path = "../chico_file" }
 
 [lints]
 workspace = true

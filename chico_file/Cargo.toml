@@ -8,6 +8,7 @@ documentation.workspace = true
 
 
 [dependencies]
+nom = "7"
 
 [lints]
 workspace = true
