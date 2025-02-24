@@ -243,7 +243,7 @@ fn parse_header(input: &str) -> IResult<&str, Middleware> {
     println!("input: {:?}", input);
     // Parse the header operator
     let (input, operator) = alt((
-        // two char characters should be parsed first
+        // two operator characters should be parsed first
         map(tag("~>"), |_| HeaderOperator::DeferReplace),
         map(tag("+"), |_| HeaderOperator::Add),
         map(tag(">"), |_| HeaderOperator::DeferSet),
