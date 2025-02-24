@@ -64,11 +64,9 @@ fn parse_virtual_host(input: &str) -> IResult<&str, VirtualHost> {
         char('}'),
     )(input)?;
 
-    println!("inputsss {}", input);
-
     // Allow comments before virtual host ending
     let (input, _) = many0(parse_comment)(input)?;
-    println!("input {}", input);
+
     // Use filter_map to remove None values and unwrap Some(Route)
     let routes: Vec<Route> = routes.into_iter().flatten().flatten().collect();
 
