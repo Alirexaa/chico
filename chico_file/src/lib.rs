@@ -43,14 +43,9 @@ pub enum Middleware {
 // Parses a single-line comment like "# this is a comment"
 fn parse_comment(input: &str) -> IResult<&str, ()> {
     let (input, _) = multispace0(input)?;
-    println!("input: {:?}", input);
     let (input, _) = tag("#")(input)?;
-    println!("tag: {:?}", input);
-
     let (input, _) = opt(not_line_ending)(input)?;
-    let (input, _) = line_ending(input)?;
-    println!("input2: {:?}", input);
-
+    let (input, _) = opt(line_ending)(input)?;
     Ok((input, ()))
 }
 
@@ -60,7 +55,23 @@ fn parse_virtual_host(input: &str) -> IResult<&str, VirtualHost> {
     let (input, domain) = take_while1(|c: char| !c.is_whitespace() && c != '{')(input)?;
     let (input, _) = multispace0(input)?;
 
-    let (input, routes) = delimited(char('{'), many0(parse_route), char('}'))(input)?;
+    let (input, routes) = delimited(
+        char('{'),
+        many0(alt((
+            map(parse_route, Some),       // Parses routes as Some(Route)
+            map(parse_comment, |_| None), // Ignores comments, returning None
+        ))),
+        char('}'),
+    )(input)?;
+
+    println!("inputsss {}", input);
+
+    // Allow comments before virtual host ending
+    let (input, _) = many0(parse_comment)(input)?;
+    println!("input {}", input);
+    // Use filter_map to remove None values and unwrap Some(Route)
+    let routes: Vec<Route> = routes.into_iter().flatten().flatten().collect();
+
     Ok((
         input,
         VirtualHost {
@@ -71,44 +82,64 @@ fn parse_virtual_host(input: &str) -> IResult<&str, VirtualHost> {
 }
 
 // Parses a route like "route /path { ... }"
-fn parse_route(input: &str) -> IResult<&str, Route> {
+fn parse_route(input: &str) -> IResult<&str, Option<Route>> {
     let (input, _) = multispace0(input)?;
+
+    // Allow comments before a route
+    let (input, _) = many0(parse_comment)(input)?;
 
     let (input, _) = tag("route")(input)?;
-
     let (input, _) = space1(input)?;
-    let (input, _) = multispace0(input)?;
     let (input, path) = take_while1(|c: char| !c.is_whitespace() && c != '{')(input)?;
-
     let (input, _) = multispace0(input)?;
 
     let (input, (handler, middlewares)) =
         delimited(char('{'), parse_route_contents, char('}'))(input)?;
+
     let (input, _) = multispace0(input)?;
+
+    // Allow comments after a route
+    let (input, _) = many0(parse_comment)(input)?;
+
+    let (input, _) = multispace0(input)?;
+
     Ok((
         input,
-        Route {
+        Some(Route {
             path: path.to_string(),
             handler,
             middlewares,
-        },
+        }),
     ))
 }
 
 // Parses handler + middleware settings inside a route block
 fn parse_route_contents(input: &str) -> IResult<&str, (Handler, Vec<Middleware>)> {
     let (input, _) = multispace0(input)?;
+
+    // Allow comments before handler
+    let (input, _) = many0(parse_comment)(input)?;
+
     let (input, handler) = parse_handler(input)?;
     let (input, _) = multispace0(input)?;
 
-    let (input, middlewares) = many0(parse_middleware)(input)?;
+    // Allow comments before middlewares
+    let (input, middlewares) = many0(alt((
+        map(parse_comment, |_| None), // Allow comments inside route block
+        map(parse_middleware, Some),  // Parse middleware
+    )))(input)?;
+
     let (input, _) = multispace0(input)?;
+
+    // Remove None values (from comments)
+    let middlewares = middlewares.into_iter().flatten().collect();
 
     Ok((input, (handler, middlewares)))
 }
 
 // Parses different handlers (file, proxy, dir, browse)
 fn parse_handler(input: &str) -> IResult<&str, Handler> {
+    let (input, _) = multispace0(input)?;
     alt((
         map(preceded(tag("file"), parse_value), Handler::File),
         map(preceded(tag("proxy"), parse_value), Handler::Proxy),
@@ -173,16 +204,8 @@ fn parse_value(input: &str) -> IResult<&str, String> {
 // Parses the entire configuration, allowing comments and empty lines
 pub fn parse_config(input: &str) -> IResult<&str, Vec<VirtualHost>> {
     many0(alt((
-        parse_virtual_host,
-        map(parse_comment, |_| VirtualHost {
-            domain: "".to_string(),
-            routes: vec![],
-        }),
+        map(parse_virtual_host, Some),
+        map(parse_comment, |_| None), // Skip comments
     )))(input)
-    .map(|(i, hosts)| {
-        (
-            i,
-            hosts.into_iter().filter(|h| !h.domain.is_empty()).collect(),
-        )
-    })
+    .map(|(i, hosts)| (i, hosts.into_iter().flatten().collect()))
 }
