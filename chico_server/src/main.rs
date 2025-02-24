@@ -47,7 +47,16 @@ fn main() {
         route /example {
             respond "<h1>Example</h1>" 200
             
-            #header Content-Type text/html
+            #header +Content-Type text/html
+
+            header =X-Set-Or-Overwrite-Example-Header value
+            header >X-Set-With-defer value
+            header -X-Delete-Example-Header
+            header +X-Add-Example-Header value
+            header ?X-Set-If-NotExist-Example-Header value 
+            header ~X-Replace-Header-Value value replace_with_this
+            header ~>X-Replace-Header-Value-With-Defer value replace_with_this
+
         }
 
         # This is comment

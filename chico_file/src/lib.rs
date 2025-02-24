@@ -61,15 +61,15 @@ pub enum Middleware {
 pub enum HeaderOperator {
     /// Prefix with + to add the field instead of overwriting (setting) the field if it already exists; header fields can appear more than once in a request.
     Add,
-    /// No prefix means the field is set if it doesn't exist, and otherwise it is replaced.
+    /// Prefix with = means the field is set if it doesn't exist, and otherwise it is replaced.
     Set,
     /// Prefix with > to set the field, and enable defer, as a shortcut.
     DeferSet,
     /// Prefix with - to delete the field. The field may use prefix or suffix * wildcards to delete all matching fields.
     Delete,
-    /// <replace> is the replacement value; required if performing a search-and-replace. Use $1 or $2 and so on to reference capture groups from the search pattern. If the replacement value is "", then the matching text is removed from the value.
+    /// Prefix with ~ <replace> is the replacement value; required if performing a search-and-replace. Use $1 or $2 and so on to reference capture groups from the search pattern. If the replacement value is "", then the matching text is removed from the value.
     Replace,
-    /// Replace with defer behavior
+    /// Prefix with ~> with defer behavior
     DeferReplace,
     /// Prefix with ? to set a default value for the field. The field is only written if it doesn't yet exist.
     Default,
@@ -199,6 +199,7 @@ fn parse_middleware(input: &str) -> IResult<&str, Middleware> {
         parse_rate_limit,
         parse_auth,
         parse_cache,
+        parse_header,
     ))(input)
 }
 
@@ -234,6 +235,42 @@ fn parse_cache(input: &str) -> IResult<&str, Middleware> {
     Ok((input, Middleware::Cache(duration.to_string())))
 }
 
+// Parses "header <key> <value>" or "header <key> <value> <replace_with>" or "header <key>"
+fn parse_header(input: &str) -> IResult<&str, Middleware> {
+    let (input, _) = tag("header")(input)?;
+    let (input, _) = space1(input)?;
+
+    println!("input: {:?}", input);
+    // Parse the header operator
+    let (input, operator) = alt((
+        // two char characters should be parsed first
+        map(tag("~>"), |_| HeaderOperator::DeferReplace),
+        map(tag("+"), |_| HeaderOperator::Add),
+        map(tag(">"), |_| HeaderOperator::DeferSet),
+        map(tag("-"), |_| HeaderOperator::Delete),
+        map(tag("?"), |_| HeaderOperator::Default),
+        map(tag("="), |_| HeaderOperator::Set),
+        map(tag("~"), |_| HeaderOperator::Replace),
+    ))(input)?;
+
+    // Parse the header name and value and replace_with if present
+    let (input, (name, value, replace_with)) = tuple((
+        take_while1(|c: char| !c.is_whitespace()),
+        opt(preceded(space1, take_while1(|c: char| !c.is_whitespace()))),
+        opt(preceded(space1, take_while1(|c: char| !c.is_whitespace()))),
+    ))(input)?;
+
+    Ok((
+        input,
+        Middleware::Header {
+            operator,
+            name: name.to_string(),
+            value: value.map(|s| s.to_string()),
+            replace_with: replace_with.map(|s| s.to_string()),
+        },
+    ))
+}
+
 // Parses values like "index.html" or "http://localhost:3000"
 fn parse_value(input: &str) -> IResult<&str, String> {
     let (input, _) = space1(input)?;
@@ -265,7 +302,6 @@ pub fn parse_config(input: &str) -> IResult<&str, Vec<VirtualHost>> {
     .map(|(i, hosts)| (i, hosts.into_iter().flatten().collect()))
 }
 
-#[allow(dead_code)]
 /// Parses a string literal  
 fn string_literal(input: &str) -> IResult<&str, String> {
     delimited(
