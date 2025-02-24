@@ -28,6 +28,28 @@ fn main() {
             # This is comment
             rate_limit 10 
         }
+
+        route /static-response {
+            # This is comment
+            respond "Hello, world!" # This is comment
+        }
+
+        # This is comment
+        route /health {
+            respond 200 # This is comment
+        }
+
+        # This is comment
+        route /secret {
+            respond "Access Denied" 403 # This is comment
+        }
+
+        route /example {
+            respond "<h1>Example</h1>" 200
+            
+            #header Content-Type text/html
+        }
+
         # This is comment
         # This is comment
 
