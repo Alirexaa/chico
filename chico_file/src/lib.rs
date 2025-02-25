@@ -3,93 +3,25 @@
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while1},
-    character::complete::{
-        char, digit1, line_ending, multispace0, none_of, not_line_ending, space1,
-    },
+    character::complete::{char, digit1, multispace0, none_of, not_line_ending, space1},
     combinator::{map, opt},
     multi::many0,
     sequence::{delimited, preceded, tuple},
     IResult,
 };
 
-#[derive(Debug)]
-pub struct VirtualHost {
-    pub domain: String,
-    pub routes: Vec<Route>,
-}
-
-#[derive(Debug)]
-pub struct Route {
-    pub path: String,
-    pub handler: Handler,
-    pub middlewares: Vec<Middleware>,
-}
-
-#[derive(Debug)]
-pub enum Handler {
-    File(String),
-    Proxy(String),
-    Dir(String),
-    Browse(String),
-    Respond {
-        status: Option<u16>,
-        body: Option<String>,
-    },
-    Redirect {
-        path: Option<String>,
-        status_code: Option<u16>,
-    },
-}
-
-#[derive(Debug)]
-pub enum Middleware {
-    Gzip,
-    Cors,
-    Log,
-    RateLimit(u32),
-    Auth {
-        username: String,
-        password: String,
-    },
-    Cache(String),
-    /// First Parameter is the header name with prefix operator, second is the header value, third is for replace value
-    Header {
-        operator: HeaderOperator,
-        name: String,
-        value: Option<String>,
-        replace_with: Option<String>,
-    },
-}
-
-#[derive(Debug)]
-pub enum HeaderOperator {
-    /// Prefix with + to add the field instead of overwriting (setting) the field if it already exists; header fields can appear more than once in a request.
-    Add,
-    /// Prefix with = means the field is set if it doesn't exist, and otherwise it is replaced.
-    Set,
-    /// Prefix with > to set the field, and enable defer, as a shortcut.
-    DeferSet,
-    /// Prefix with - to delete the field. The field may use prefix or suffix * wildcards to delete all matching fields.
-    Delete,
-    /// Prefix with ~ <replace> is the replacement value; required if performing a search-and-replace. Use $1 or $2 and so on to reference capture groups from the search pattern. If the replacement value is "", then the matching text is removed from the value.
-    Replace,
-    /// Prefix with ~> with defer behavior
-    DeferReplace,
-    /// Prefix with ? to set a default value for the field. The field is only written if it doesn't yet exist.
-    Default,
-}
+mod types;
 
 // Parses a single-line comment like "# this is a comment"
 fn parse_comment(input: &str) -> IResult<&str, ()> {
     let (input, _) = multispace0(input)?;
     let (input, _) = tag("#")(input)?;
     let (input, _) = opt(not_line_ending)(input)?;
-    let (input, _) = opt(line_ending)(input)?;
     Ok((input, ()))
 }
 
 // Parses a domain like "example.com { ... }"
-fn parse_virtual_host(input: &str) -> IResult<&str, VirtualHost> {
+fn parse_virtual_host(input: &str) -> IResult<&str, types::VirtualHost> {
     let (input, _) = multispace0(input)?;
     let (input, domain) = take_while1(|c: char| !c.is_whitespace() && c != '{')(input)?;
     let (input, _) = multispace0(input)?;
@@ -107,11 +39,11 @@ fn parse_virtual_host(input: &str) -> IResult<&str, VirtualHost> {
     let (input, _) = many0(parse_comment)(input)?;
 
     // Use filter_map to remove None values and unwrap Some(Route)
-    let routes: Vec<Route> = routes.into_iter().flatten().flatten().collect();
+    let routes: Vec<types::Route> = routes.into_iter().flatten().flatten().collect();
 
     Ok((
         input,
-        VirtualHost {
+        types::VirtualHost {
             domain: domain.to_string(),
             routes,
         },
@@ -119,7 +51,7 @@ fn parse_virtual_host(input: &str) -> IResult<&str, VirtualHost> {
 }
 
 // Parses a route like "route /path { ... }"
-fn parse_route(input: &str) -> IResult<&str, Option<Route>> {
+fn parse_route(input: &str) -> IResult<&str, Option<types::Route>> {
     let (input, _) = multispace0(input)?;
 
     // Allow comments before a route
@@ -142,7 +74,7 @@ fn parse_route(input: &str) -> IResult<&str, Option<Route>> {
 
     Ok((
         input,
-        Some(Route {
+        Some(types::Route {
             path: path.to_string(),
             handler,
             middlewares,
@@ -151,7 +83,7 @@ fn parse_route(input: &str) -> IResult<&str, Option<Route>> {
 }
 
 // Parses handler + middleware settings inside a route block
-fn parse_route_contents(input: &str) -> IResult<&str, (Handler, Vec<Middleware>)> {
+fn parse_route_contents(input: &str) -> IResult<&str, (types::Handler, Vec<types::Middleware>)> {
     let (input, _) = multispace0(input)?;
 
     // Allow comments before handler
@@ -175,35 +107,35 @@ fn parse_route_contents(input: &str) -> IResult<&str, (Handler, Vec<Middleware>)
 }
 
 // Parses different handlers (file, proxy, dir, browse)
-fn parse_handler(input: &str) -> IResult<&str, Handler> {
+fn parse_handler(input: &str) -> IResult<&str, types::Handler> {
     let (input, _) = multispace0(input)?;
     alt((
-        map(preceded(tag("file"), parse_value), Handler::File),
-        map(preceded(tag("proxy"), parse_value), Handler::Proxy),
-        map(preceded(tag("dir"), parse_value), Handler::Dir),
-        map(preceded(tag("browse"), parse_value), Handler::Browse),
+        map(preceded(tag("file"), parse_value), types::Handler::File),
+        map(preceded(tag("proxy"), parse_value), types::Handler::Proxy),
+        map(preceded(tag("dir"), parse_value), types::Handler::Dir),
+        map(preceded(tag("browse"), parse_value), types::Handler::Browse),
         map(
-            preceded(tag("respond"), parse_respond_handler),
-            |(status, body)| Handler::Respond {
+            preceded(tag("respond"), parse_respond_handler_args),
+            |(status, body)| types::Handler::Respond {
                 status: status,
                 body: body,
             },
         ),
         map(
-            preceded(tag("redirect"), parse_redirect_handler),
-            |(status_code, path)| Handler::Redirect { status_code, path },
+            preceded(tag("redirect"), parse_redirect_handler_args),
+            |(status_code, path)| types::Handler::Redirect { status_code, path },
         ),
     ))(input)
 }
 
 // Parses middleware options like "gzip", "cors", "log", "rate_limit 10", "auth admin pass"
-fn parse_middleware(input: &str) -> IResult<&str, Middleware> {
+fn parse_middleware(input: &str) -> IResult<&str, types::Middleware> {
     let (input, _) = multispace0(input)?;
 
     alt((
-        map(tag("gzip"), |_| Middleware::Gzip),
-        map(tag("cors"), |_| Middleware::Cors),
-        map(tag("log"), |_| Middleware::Log),
+        map(tag("gzip"), |_| types::Middleware::Gzip),
+        map(tag("cors"), |_| types::Middleware::Cors),
+        map(tag("log"), |_| types::Middleware::Log),
         parse_rate_limit,
         parse_auth,
         parse_cache,
@@ -212,15 +144,15 @@ fn parse_middleware(input: &str) -> IResult<&str, Middleware> {
 }
 
 // Parses "rate_limit <N>"
-fn parse_rate_limit(input: &str) -> IResult<&str, Middleware> {
+fn parse_rate_limit(input: &str) -> IResult<&str, types::Middleware> {
     let (input, _) = tag("rate_limit")(input)?;
     let (input, _) = space1(input)?;
     let (input, num) = take_while1(|c: char| c.is_digit(10))(input)?;
-    Ok((input, Middleware::RateLimit(num.parse().unwrap())))
+    Ok((input, types::Middleware::RateLimit(num.parse().unwrap())))
 }
 
 // Parses "auth <username> <password>"
-fn parse_auth(input: &str) -> IResult<&str, Middleware> {
+fn parse_auth(input: &str) -> IResult<&str, types::Middleware> {
     let (input, _) = tag("auth")(input)?;
     let (input, _) = space1(input)?;
     let (input, username) = take_while1(|c: char| !c.is_whitespace())(input)?;
@@ -228,7 +160,7 @@ fn parse_auth(input: &str) -> IResult<&str, Middleware> {
     let (input, password) = take_while1(|c: char| !c.is_whitespace())(input)?;
     Ok((
         input,
-        Middleware::Auth {
+        types::Middleware::Auth {
             username: username.to_string(),
             password: password.to_string(),
         },
@@ -236,15 +168,15 @@ fn parse_auth(input: &str) -> IResult<&str, Middleware> {
 }
 
 // Parses "cache <duration>"
-fn parse_cache(input: &str) -> IResult<&str, Middleware> {
+fn parse_cache(input: &str) -> IResult<&str, types::Middleware> {
     let (input, _) = tag("cache")(input)?;
     let (input, _) = space1(input)?;
     let (input, duration) = take_while1(|c: char| !c.is_whitespace())(input)?;
-    Ok((input, Middleware::Cache(duration.to_string())))
+    Ok((input, types::Middleware::Cache(duration.to_string())))
 }
 
 // Parses "header <key> <value>" or "header <key> <value> <replace_with>" or "header <key>"
-fn parse_header(input: &str) -> IResult<&str, Middleware> {
+fn parse_header(input: &str) -> IResult<&str, types::Middleware> {
     let (input, _) = tag("header")(input)?;
     let (input, _) = space1(input)?;
 
@@ -252,13 +184,13 @@ fn parse_header(input: &str) -> IResult<&str, Middleware> {
     // Parse the header operator
     let (input, operator) = alt((
         // two operator characters should be parsed first
-        map(tag("~>"), |_| HeaderOperator::DeferReplace),
-        map(tag("+"), |_| HeaderOperator::Add),
-        map(tag(">"), |_| HeaderOperator::DeferSet),
-        map(tag("-"), |_| HeaderOperator::Delete),
-        map(tag("?"), |_| HeaderOperator::Default),
-        map(tag("="), |_| HeaderOperator::Set),
-        map(tag("~"), |_| HeaderOperator::Replace),
+        map(tag("~>"), |_| types::HeaderOperator::DeferReplace),
+        map(tag("+"), |_| types::HeaderOperator::Add),
+        map(tag(">"), |_| types::HeaderOperator::DeferSet),
+        map(tag("-"), |_| types::HeaderOperator::Delete),
+        map(tag("?"), |_| types::HeaderOperator::Default),
+        map(tag("="), |_| types::HeaderOperator::Set),
+        map(tag("~"), |_| types::HeaderOperator::Replace),
     ))(input)?;
 
     // Parse the header name and value and replace_with if present
@@ -270,7 +202,7 @@ fn parse_header(input: &str) -> IResult<&str, Middleware> {
 
     Ok((
         input,
-        Middleware::Header {
+        types::Middleware::Header {
             operator,
             name: name.to_string(),
             value: value.map(|s| s.to_string()),
@@ -287,7 +219,7 @@ fn parse_value(input: &str) -> IResult<&str, String> {
 }
 
 // Parses values like "index.html" or "http://localhost:3000"
-fn parse_respond_handler(input: &str) -> IResult<&str, (Option<u16>, Option<String>)> {
+fn parse_respond_handler_args(input: &str) -> IResult<&str, (Option<u16>, Option<String>)> {
     let (input, _) = space1(input)?;
 
     let (input, result) = alt((
@@ -301,7 +233,7 @@ fn parse_respond_handler(input: &str) -> IResult<&str, (Option<u16>, Option<Stri
     Ok((input, (result.1, result.0)))
 }
 
-fn parse_redirect_handler(input: &str) -> IResult<&str, (Option<u16>, Option<String>)> {
+fn parse_redirect_handler_args(input: &str) -> IResult<&str, (Option<u16>, Option<String>)> {
     let (input, _) = space1(input)?;
 
     let (input, result) = alt((
@@ -317,7 +249,7 @@ fn parse_redirect_handler(input: &str) -> IResult<&str, (Option<u16>, Option<Str
 }
 
 // Parses the entire configuration, allowing comments and empty lines
-pub fn parse_config(input: &str) -> IResult<&str, Vec<VirtualHost>> {
+pub fn parse_config(input: &str) -> IResult<&str, Vec<types::VirtualHost>> {
     many0(alt((
         map(parse_virtual_host, Some),
         map(parse_comment, |_| None), // Skip comments
@@ -363,4 +295,336 @@ fn parse_string_u16(input: &str) -> IResult<&str, (&str, u16)> {
         take_while1(|c: char| !c.is_whitespace()),
         preceded(space1, parse_u16),
     ))(input)
+}
+
+#[cfg(test)]
+mod tests {
+    mod comments {
+        use crate::parse_comment;
+
+        #[test]
+        fn test_parse_comment_success() {
+            assert_eq!(parse_comment("# this is a comment"), Ok(("", ())));
+            assert_eq!(parse_comment("# this is a comment\n"), Ok(("\n", ())));
+            assert_eq!(parse_comment("# this is a comment\n\n"), Ok(("\n\n", ())));
+            assert_eq!(
+                parse_comment("# this is a comment\n\n\n"),
+                Ok(("\n\n\n", ()))
+            );
+            // 1 space before comment
+            assert_eq!(parse_comment(" # this is a comment"), Ok(("", ())));
+            // 2 spaces before comment
+            assert_eq!(parse_comment("  # this is a comment"), Ok(("", ())));
+            // 3 spaces before comment
+            assert_eq!(parse_comment("   # this is a comment"), Ok(("", ())));
+            // 4 spaces before comment
+            assert_eq!(parse_comment("    # this is a comment"), Ok(("", ())));
+            assert_eq!(parse_comment("\t# this is a comment"), Ok(("", ())));
+            assert_eq!(parse_comment("\t # this is a comment"), Ok(("", ())));
+            assert_eq!(parse_comment("\t\t # this is a comment"), Ok(("", ())));
+            assert_eq!(parse_comment("\t\t  # this is a comment"), Ok(("", ())));
+        }
+
+        #[test]
+        fn test_parse_comment_fail() {
+            assert!(parse_comment("this is not a comment").is_err());
+            assert!(parse_comment("this is not a comment\n").is_err());
+            assert!(parse_comment("this is not a comment\n\n").is_err());
+            assert!(parse_comment("this is not a comment\n\n\n").is_err());
+            assert!(parse_comment("this is not a comment\n\n\n\n").is_err());
+            assert!(parse_comment("this is not a comment\n\n\n\n\n").is_err());
+            assert!(parse_comment("this is not a comment\n\n\n\n\n\n").is_err());
+            assert!(parse_comment("this is not a comment\n\n\n\n\n\n\n").is_err());
+        }
+    }
+
+    mod routes {
+        use crate::{parse_route, types};
+
+        #[test]
+        fn test_parse_route_respond_handler_with_no_middleware_inline() {
+            assert_eq!(
+                parse_route("route /example { respond \"<h1>Example</h1>\" 200 }"),
+                Ok((
+                    "",
+                    Some(types::Route {
+                        path: "/example".to_string(),
+                        handler: types::Handler::Respond {
+                            status: Some(200),
+                            body: Some("<h1>Example</h1>".to_string()),
+                        },
+                        middlewares: vec![]
+                    }),
+                ))
+            );
+
+            assert_eq!(
+                parse_route("route /example { respond 200 }"),
+                Ok((
+                    "",
+                    Some(types::Route {
+                        path: "/example".to_string(),
+                        handler: types::Handler::Respond {
+                            status: Some(200),
+                            body: None,
+                        },
+                        middlewares: vec![]
+                    }),
+                ))
+            );
+
+            assert_eq!(
+                parse_route("route /example { respond \"<h1>Example</h1>\" }"),
+                Ok((
+                    "",
+                    Some(types::Route {
+                        path: "/example".to_string(),
+                        handler: types::Handler::Respond {
+                            status: None,
+                            body: Some("<h1>Example</h1>".to_string()),
+                        },
+                        middlewares: vec![]
+                    }),
+                ))
+            );
+        }
+
+        #[test]
+        fn test_parse_route_respond_handler_with_no_middleware_expanded() {
+            let route = r#"
+            route /example {
+                respond "<h1>Example</h1>" 200
+            }
+            "#;
+
+            assert_eq!(
+                parse_route(route),
+                Ok((
+                    "",
+                    Some(types::Route {
+                        path: "/example".to_string(),
+                        handler: types::Handler::Respond {
+                            status: Some(200),
+                            body: Some("<h1>Example</h1>".to_string()),
+                        },
+                        middlewares: vec![]
+                    }),
+                ))
+            );
+
+            let route = r#"
+            route /example {
+                respond 200
+            }
+            "#;
+
+            assert_eq!(
+                parse_route(route),
+                Ok((
+                    "",
+                    Some(types::Route {
+                        path: "/example".to_string(),
+                        handler: types::Handler::Respond {
+                            status: Some(200),
+                            body: None,
+                        },
+                        middlewares: vec![]
+                    }),
+                ))
+            );
+
+            let route = r#"
+            route /example {
+                respond "<h1>Example</h1>"
+            }
+            "#;
+
+            assert_eq!(
+                parse_route(route),
+                Ok((
+                    "",
+                    Some(types::Route {
+                        path: "/example".to_string(),
+                        handler: types::Handler::Respond {
+                            status: None,
+                            body: Some("<h1>Example</h1>".to_string()),
+                        },
+                        middlewares: vec![]
+                    }),
+                ))
+            );
+        }
+
+        #[test]
+        fn test_parse_route_file_handler_with_no_middleware_inline() {
+            assert_eq!(
+                parse_route("route / { file index.html }"),
+                Ok((
+                    "",
+                    Some(types::Route {
+                        handler: types::Handler::File("index.html".to_string()),
+                        middlewares: vec![],
+                        path: "/".to_string(),
+                    }),
+                ))
+            )
+        }
+
+        #[test]
+        fn test_parse_route_file_handler_with_no_middleware_expanded() {
+            let route = r#"
+            route / {
+                file index.html
+            }
+            "#;
+            assert_eq!(
+                parse_route(route),
+                Ok((
+                    "",
+                    Some(types::Route {
+                        handler: types::Handler::File("index.html".to_string()),
+                        middlewares: vec![],
+                        path: "/".to_string(),
+                    }),
+                ))
+            )
+        }
+    }
+
+    mod handlers {
+        use crate::{
+            parse_handler, parse_redirect_handler_args, parse_respond_handler_args, types,
+        };
+
+        #[test]
+        fn test_parse_handler_file() {
+            assert_eq!(
+                parse_handler("file index.html"),
+                Ok(("", types::Handler::File("index.html".to_string())))
+            );
+        }
+
+        #[test]
+        fn test_parse_handler_proxy() {
+            assert_eq!(
+                parse_handler("proxy http://localhost:3000"),
+                Ok((
+                    "",
+                    types::Handler::Proxy("http://localhost:3000".to_string())
+                ))
+            );
+        }
+
+        #[test]
+        fn test_parse_handler_browse() {
+            assert_eq!(
+                parse_handler("browse /path/to/dir"),
+                Ok(("", types::Handler::Browse("/path/to/dir".to_string())))
+            );
+        }
+
+        #[test]
+        fn test_parse_handler_dir() {
+            assert_eq!(
+                parse_handler("dir /path/to/dir"),
+                Ok(("", types::Handler::Dir("/path/to/dir".to_string())))
+            );
+        }
+
+        #[test]
+        fn test_parse_handler_respond() {
+            assert_eq!(
+                parse_handler("respond \"<h1>Example</h1>\" 200"),
+                Ok((
+                    "",
+                    types::Handler::Respond {
+                        status: Some(200),
+                        body: Some("<h1>Example</h1>".to_string()),
+                    }
+                ))
+            );
+
+            assert_eq!(
+                parse_handler("respond \"<h1>Example</h1>\""),
+                Ok((
+                    "",
+                    types::Handler::Respond {
+                        status: None,
+                        body: Some("<h1>Example</h1>".to_string()),
+                    }
+                ))
+            );
+
+            assert_eq!(
+                parse_handler("respond 200"),
+                Ok((
+                    "",
+                    types::Handler::Respond {
+                        status: Some(200),
+                        body: None,
+                    }
+                ))
+            );
+        }
+
+        #[test]
+        fn test_parse_handler_redirect() {
+            assert_eq!(
+                parse_handler("redirect /new-path 301"),
+                Ok((
+                    "",
+                    types::Handler::Redirect {
+                        status_code: Some(301),
+                        path: Some("/new-path".to_string())
+                    }
+                ))
+            );
+
+            assert_eq!(
+                parse_handler("redirect /new-path"),
+                Ok((
+                    "",
+                    types::Handler::Redirect {
+                        status_code: None,
+                        path: Some("/new-path".to_string())
+                    }
+                ))
+            );
+        }
+
+        #[test]
+        fn test_parse_respond_handler_args() {
+            // test with body
+            assert_eq!(
+                parse_respond_handler_args(" \"<h1>Example</h1>\""),
+                Ok(("", (None, Some("<h1>Example</h1>".to_string()))))
+            );
+            // test with body and status code
+            assert_eq!(
+                parse_respond_handler_args(" \"<h1>Example</h1>\" 200"),
+                Ok(("", (Some(200), Some("<h1>Example</h1>".to_string()))))
+            );
+
+            // test with status code
+            assert_eq!(
+                parse_respond_handler_args(" 200"),
+                Ok(("", (Some(200), None)))
+            );
+        }
+
+        #[test]
+        fn test_parse_redirect_handler_args() {
+            // test with path
+            assert_eq!(
+                parse_redirect_handler_args(" /path/to/redirect"),
+                Ok(("", (None, Some("/path/to/redirect".to_string()))))
+            );
+
+            // test with path and status code
+            assert_eq!(
+                parse_redirect_handler_args(" /path/to/redirect 301"),
+                Ok(("", (Some(301), Some("/path/to/redirect".to_string()))))
+            );
+        }
+    }
 }
