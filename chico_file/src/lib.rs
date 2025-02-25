@@ -35,6 +35,10 @@ pub enum Handler {
         status: Option<u16>,
         body: Option<String>,
     },
+    Redirect {
+        path: Option<String>,
+        status_code: Option<u16>,
+    },
 }
 
 #[derive(Debug)]
@@ -185,6 +189,10 @@ fn parse_handler(input: &str) -> IResult<&str, Handler> {
                 body: body,
             },
         ),
+        map(
+            preceded(tag("redirect"), parse_redirect_handler),
+            |(status_code, path)| Handler::Redirect { status_code, path },
+        ),
     ))(input)
 }
 
@@ -293,6 +301,21 @@ fn parse_respond_handler(input: &str) -> IResult<&str, (Option<u16>, Option<Stri
     Ok((input, (result.1, result.0)))
 }
 
+fn parse_redirect_handler(input: &str) -> IResult<&str, (Option<u16>, Option<String>)> {
+    let (input, _) = space1(input)?;
+
+    let (input, result) = alt((
+        map(parse_string_u16, |(path, status_code)| {
+            (Some(path.to_string()), Some(status_code))
+        }),
+        map(take_while1(|c: char| !c.is_whitespace()), |path: &str| {
+            (Some(path.to_string()), None)
+        }),
+    ))(input)?;
+
+    Ok((input, (result.1, result.0)))
+}
+
 // Parses the entire configuration, allowing comments and empty lines
 pub fn parse_config(input: &str) -> IResult<&str, Vec<VirtualHost>> {
     many0(alt((
@@ -332,4 +355,12 @@ fn parse_u16(input: &str) -> IResult<&str, u16> {
 /// Parses a string literal and an unsigned 16-bit integer (u16) example: "Some String" 123
 fn parse_literal_u16(input: &str) -> IResult<&str, (String, u16)> {
     tuple((string_literal, preceded(space1, parse_u16)))(input)
+}
+
+/// parse string and unsigned 16-bit integer (u16) example: sometext 123
+fn parse_string_u16(input: &str) -> IResult<&str, (&str, u16)> {
+    tuple((
+        take_while1(|c: char| !c.is_whitespace()),
+        preceded(space1, parse_u16),
+    ))(input)
 }

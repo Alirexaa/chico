@@ -44,6 +44,16 @@ fn main() {
             respond "Access Denied" 403 # This is comment
         }
 
+        # This is comment
+        route /old-path {
+            redirect /new-path
+        }
+
+        # This is comment
+        route /old-path-with-status {
+            redirect /new-path 301
+        }
+
         route /example {
             respond "<h1>Example</h1>" 200
             
