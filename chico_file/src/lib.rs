@@ -180,7 +180,6 @@ fn parse_header(input: &str) -> IResult<&str, types::Middleware> {
     let (input, _) = tag("header")(input)?;
     let (input, _) = space1(input)?;
 
-    println!("input: {:?}", input);
     // Parse the header operator
     let (input, operator) = alt((
         // two operator characters should be parsed first
@@ -624,6 +623,121 @@ mod tests {
             assert_eq!(
                 parse_redirect_handler_args(" /path/to/redirect 301"),
                 Ok(("", (Some(301), Some("/path/to/redirect".to_string()))))
+            );
+        }
+    }
+
+    mod middlewares {
+        use rstest::rstest;
+
+        use crate::{parse_middleware, types};
+        #[test]
+        fn test_parse_middleware_gzip() {
+            assert_eq!(parse_middleware("gzip"), Ok(("", types::Middleware::Gzip)));
+        }
+
+        #[test]
+        fn test_parse_middleware_cors() {
+            assert_eq!(parse_middleware("cors"), Ok(("", types::Middleware::Cors)));
+        }
+
+        #[test]
+        fn test_parse_middleware_log() {
+            assert_eq!(parse_middleware("log"), Ok(("", types::Middleware::Log)));
+        }
+
+        #[test]
+        fn test_parse_middleware_rate_limit() {
+            assert_eq!(
+                parse_middleware("rate_limit 10"),
+                Ok(("", types::Middleware::RateLimit(10)))
+            );
+        }
+
+        #[test]
+        fn test_parse_middleware_auth() {
+            assert_eq!(
+                parse_middleware("auth admin pass"),
+                Ok((
+                    "",
+                    types::Middleware::Auth {
+                        username: "admin".to_string(),
+                        password: "pass".to_string()
+                    }
+                ))
+            );
+        }
+
+        #[test]
+        fn test_parse_middleware_cache() {
+            assert_eq!(
+                parse_middleware("cache 5m"),
+                Ok(("", types::Middleware::Cache("5m".to_string())))
+            );
+        }
+
+        #[rstest]
+        #[case(
+            "header +X-Cache HIT",
+            types::HeaderOperator::Add,
+            "X-Cache",
+            Some("HIT"),
+            None
+        )]
+        #[case("header -Server", types::HeaderOperator::Delete, "Server", None, None)]
+        #[case(
+            "header =Content-Type text/html",
+            types::HeaderOperator::Set,
+            "Content-Type",
+            Some("text/html"),
+            None
+        )]
+        #[case(
+            "header >Content-Type text/html",
+            types::HeaderOperator::DeferSet,
+            "Content-Type",
+            Some("text/html"),
+            None
+        )]
+        #[case(
+            "header ~Location http:// https://",
+            types::HeaderOperator::Replace,
+            "Location",
+            Some("http://"),
+            Some("https://")
+        )]
+        #[case(
+            "header ~>Location http:// https://",
+            types::HeaderOperator::DeferReplace,
+            "Location",
+            Some("http://"),
+            Some("https://")
+        )]
+        #[case(
+            "header ?Cache-Control max-age=3600",
+            types::HeaderOperator::Default,
+            "Cache-Control",
+            Some("max-age=3600"),
+            None
+        )]
+        fn test_parse_middleware_header(
+            #[case] input: &str,
+            #[case] operator: types::HeaderOperator,
+            #[case] name: &str,
+            #[case] value: Option<&str>,
+            #[case] replace_with: Option<&str>,
+        ) {
+            assert_eq!(
+                parse_middleware(input),
+                Ok((
+                    "",
+                    types::Middleware::Header {
+                        operator: operator,
+                        name: name.to_string(),
+                        value: value.map(|s| s.to_string()),
+                        replace_with: replace_with.map(|s| s.to_string()),
+                    }
+                ))
             );
         }
     }
