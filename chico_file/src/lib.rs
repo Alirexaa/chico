@@ -630,7 +630,7 @@ mod tests {
     mod middlewares {
         use rstest::rstest;
 
-        use crate::{parse_middleware, types};
+        use crate::{parse_auth, parse_cache, parse_header, parse_middleware, types};
         #[test]
         fn test_parse_middleware_gzip() {
             assert_eq!(parse_middleware("gzip"), Ok(("", types::Middleware::Gzip)));
@@ -732,12 +732,55 @@ mod tests {
                 Ok((
                     "",
                     types::Middleware::Header {
+                        operator: operator.clone(),
+                        name: name.to_string(),
+                        value: value.map(|s| s.to_string()),
+                        replace_with: replace_with.map(|s| s.to_string()),
+                    }
+                ))
+            );
+
+            assert_eq!(
+                parse_header(input),
+                Ok((
+                    "",
+                    types::Middleware::Header {
                         operator: operator,
                         name: name.to_string(),
                         value: value.map(|s| s.to_string()),
                         replace_with: replace_with.map(|s| s.to_string()),
                     }
                 ))
+            );
+        }
+
+        #[test]
+        fn test_parse_cache() {
+            assert_eq!(
+                parse_cache("cache 5m"),
+                Ok(("", types::Middleware::Cache("5m".to_string())))
+            );
+        }
+
+        #[test]
+        fn test_parse_auth() {
+            assert_eq!(
+                parse_auth("auth admin pass"),
+                Ok((
+                    "",
+                    types::Middleware::Auth {
+                        username: "admin".to_string(),
+                        password: "pass".to_string()
+                    }
+                ))
+            );
+        }
+
+        #[test]
+        fn test_parse_rate_limit() {
+            assert_eq!(
+                crate::parse_rate_limit("rate_limit 10"),
+                Ok(("", types::Middleware::RateLimit(10)))
             );
         }
     }
