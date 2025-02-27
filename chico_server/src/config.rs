@@ -17,7 +17,7 @@ pub(crate) async fn validate_config_file(path: &str) -> Result<(), String> {
 fn parse_with_validate(content: &str) -> Result<(), String> {
     if content.is_empty() {
         return Err(format!(
-            "Failed to parse content. reason : content is empty."
+            "Failed to parse content. reason: content is empty."
         ));
     }
 
@@ -84,7 +84,7 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(
             result.err().unwrap(),
-            "Failed to parse content. reason : content is empty."
+            "Failed to parse content. reason: content is empty."
         );
     }
 
@@ -240,7 +240,7 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(
             result.err().unwrap(),
-            "Failed to parse content. reason : content is empty."
+            "Failed to parse content. reason: content is empty."
         );
     }
 
