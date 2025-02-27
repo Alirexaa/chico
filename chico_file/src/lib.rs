@@ -57,6 +57,7 @@ fn parse_route(input: &str) -> IResult<&str, Option<types::Route>> {
 
     // Allow comments before a route
     let (input, _) = many0(parse_comment)(input)?;
+    let (input, _) = multispace0(input)?;
 
     let (input, _) = tag("route")(input)?;
     let (input, _) = space1(input)?;
@@ -350,7 +351,7 @@ mod tests {
     }
 
     mod routes {
-        use crate::{parse_route, types};
+        use crate::{parse_route, parse_route_contents, types};
 
         #[test]
         fn test_parse_route_respond_handler_with_no_middleware_inline() {
@@ -499,6 +500,107 @@ mod tests {
                     }),
                 ))
             )
+        }
+
+        #[test]
+        fn test_parse_route_with_middleware() {
+            let route = r#"
+            route /example {
+            respond "<h1>Example</h1>" 200
+            gzip
+            cors
+            }
+            "#;
+
+            assert_eq!(
+                parse_route(route),
+                Ok((
+                    "",
+                    Some(types::Route {
+                        path: "/example".to_string(),
+                        handler: types::Handler::Respond {
+                            status: Some(200),
+                            body: Some("<h1>Example</h1>".to_string()),
+                        },
+                        middlewares: vec![types::Middleware::Gzip, types::Middleware::Cors,]
+                    }),
+                ))
+            );
+        }
+
+        #[test]
+        fn test_parse_route_with_comments() {
+            let route = r#"
+            # This is a comment
+            route /example {
+            # Another comment
+            respond "<h1>Example</h1>" 200
+            # Middleware comment
+            gzip
+            }
+            "#;
+
+            assert_eq!(
+                parse_route(route),
+                Ok((
+                    "",
+                    Some(types::Route {
+                        path: "/example".to_string(),
+                        handler: types::Handler::Respond {
+                            status: Some(200),
+                            body: Some("<h1>Example</h1>".to_string()),
+                        },
+                        middlewares: vec![types::Middleware::Gzip,]
+                    }),
+                ))
+            );
+        }
+
+        #[test]
+        fn test_parse_route_contents_with_middleware() {
+            let contents = r#"
+            respond "<h1>Example</h1>" 200
+            gzip
+            cors
+            "#;
+
+            assert_eq!(
+                parse_route_contents(contents),
+                Ok((
+                    "",
+                    (
+                        types::Handler::Respond {
+                            status: Some(200),
+                            body: Some("<h1>Example</h1>".to_string()),
+                        },
+                        vec![types::Middleware::Gzip, types::Middleware::Cors,]
+                    )
+                ))
+            );
+        }
+
+        #[test]
+        fn test_parse_route_contents_with_comments() {
+            let contents = r#"
+            # This is a comment
+            respond "<h1>Example</h1>" 200
+            # Middleware comment
+            gzip
+            "#;
+
+            assert_eq!(
+                parse_route_contents(contents),
+                Ok((
+                    "",
+                    (
+                        types::Handler::Respond {
+                            status: Some(200),
+                            body: Some("<h1>Example</h1>".to_string()),
+                        },
+                        vec![types::Middleware::Gzip,]
+                    )
+                ))
+            );
         }
     }
 
