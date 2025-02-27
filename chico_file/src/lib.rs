@@ -6,7 +6,7 @@ use nom::{
     character::complete::{char, digit1, multispace0, none_of, not_line_ending, space1},
     combinator::{map, opt},
     error::{Error, ErrorKind},
-    multi::many0,
+    multi::{many0, many1},
     sequence::{delimited, preceded, tuple},
     Err, IResult,
 };
@@ -251,7 +251,7 @@ fn parse_redirect_handler_args(input: &str) -> IResult<&str, (Option<u16>, Optio
 
 // Parses the entire configuration, allowing comments and empty lines
 pub fn parse_config(input: &str) -> IResult<&str, Vec<types::VirtualHost>> {
-    many0(alt((
+    many1(alt((
         map(parse_virtual_host, Some),
         map(parse_comment, |_| None), // Skip comments
     )))(input)
@@ -1025,7 +1025,8 @@ mod tests {
 
     mod virtual_host {
         mod virtual_host {
-            use crate::{parse_virtual_host, types};
+            use crate::parse_virtual_host;
+            use crate::types;
 
             #[test]
             fn test_parse_virtual_host_success() {
@@ -1166,6 +1167,417 @@ mod tests {
 
                 assert!(parse_virtual_host(input).is_err());
             }
+        }
+    }
+
+    mod config {
+        use crate::{parse_config, types};
+
+        #[test]
+        fn test_parse_config_single_virtual_host() {
+            let input = r#"
+            example.com {
+                route / {
+                    file index.html
+                }
+            }
+            "#;
+
+            assert_eq!(
+                parse_config(input),
+                Ok((
+                    "\n            ",
+                    vec![types::VirtualHost {
+                        domain: "example.com".to_string(),
+                        routes: vec![types::Route {
+                            path: "/".to_string(),
+                            handler: types::Handler::File("index.html".to_string()),
+                            middlewares: vec![],
+                        }],
+                    }]
+                ))
+            );
+        }
+
+        #[test]
+        fn test_parse_config_multiple_virtual_hosts() {
+            let input = r#"
+            example.com {
+                route / {
+                    file index.html
+                }
+            }
+            another.com {
+                route /about {
+                    file about.html
+                }
+            }
+            "#;
+
+            assert_eq!(
+                parse_config(input),
+                Ok((
+                    "\n            ",
+                    vec![
+                        types::VirtualHost {
+                            domain: "example.com".to_string(),
+                            routes: vec![types::Route {
+                                path: "/".to_string(),
+                                handler: types::Handler::File("index.html".to_string()),
+                                middlewares: vec![],
+                            }],
+                        },
+                        types::VirtualHost {
+                            domain: "another.com".to_string(),
+                            routes: vec![types::Route {
+                                path: "/about".to_string(),
+                                handler: types::Handler::File("about.html".to_string()),
+                                middlewares: vec![],
+                            }],
+                        }
+                    ]
+                ))
+            );
+        }
+
+        #[test]
+        fn test_parse_config_with_comments() {
+            let input = r#"
+            # This is a comment
+            example.com {
+                # Another comment
+                route / {
+                    file index.html
+                }
+            }
+            another.com {
+                route /about {
+                    file about.html
+                }
+            }
+            "#;
+
+            assert_eq!(
+                parse_config(input),
+                Ok((
+                    "\n            ",
+                    vec![
+                        types::VirtualHost {
+                            domain: "example.com".to_string(),
+                            routes: vec![types::Route {
+                                path: "/".to_string(),
+                                handler: types::Handler::File("index.html".to_string()),
+                                middlewares: vec![],
+                            }],
+                        },
+                        types::VirtualHost {
+                            domain: "another.com".to_string(),
+                            routes: vec![types::Route {
+                                path: "/about".to_string(),
+                                handler: types::Handler::File("about.html".to_string()),
+                                middlewares: vec![],
+                            }],
+                        }
+                    ]
+                ))
+            );
+        }
+
+        #[test]
+        fn test_parse_config_with_middleware() {
+            let input = r#"
+            example.com {
+                route / {
+                    file index.html
+                    gzip
+                    cors
+                }
+            }
+            "#;
+
+            assert_eq!(
+                parse_config(input),
+                Ok((
+                    "\n            ",
+                    vec![types::VirtualHost {
+                        domain: "example.com".to_string(),
+                        routes: vec![types::Route {
+                            path: "/".to_string(),
+                            handler: types::Handler::File("index.html".to_string()),
+                            middlewares: vec![types::Middleware::Gzip, types::Middleware::Cors],
+                        }],
+                    }]
+                ))
+            );
+        }
+
+        #[test]
+        fn test_parse_config_failure() {
+            let input = r#"
+            example.com {
+                route / {
+                    file index.html
+                }
+            "#; // Missing closing brace
+
+            println!("{:?}", parse_config(input));
+            assert!(parse_config(input).is_err());
+        }
+
+        #[test]
+        fn test_parse_config_full() {
+            let input = r#"
+    # This is comment
+    # This is comment
+
+    # This is comment
+    localhost {
+        # This is comment
+        route / {
+            # This is comment
+            file index.html
+            # This is comment
+            gzip
+            # This is comment
+            log 
+            auth admin password123
+            cache 30s # This is comment
+            # This is comment
+        }
+        # This is comment
+        route /api/** {
+            # This is comment
+            proxy http://localhost:3000 # This is comment
+            cors
+            # This is comment
+            rate_limit 10 
+        }
+
+        route /static-response {
+            # This is comment
+            respond "Hello, world!" # This is comment
+        }
+
+        # This is comment
+        route /health {
+            respond 200 # This is comment
+        }
+
+        # This is comment
+        route /secret {
+            respond "Access Denied" 403 # This is comment
+        }
+
+        # This is comment
+        route /old-path {
+            redirect /new-path
+        }
+
+        # This is comment
+        route /old-path-with-status {
+            redirect /new-path 301
+        }
+
+        route /example {
+            respond "<h1>Example</h1>" 200
+            
+            #header +Content-Type text/html
+
+            header =X-Set-Or-Overwrite-Example-Header value
+            header >X-Set-With-defer value
+            header -X-Delete-Example-Header
+            header +X-Add-Example-Header value
+            header ?X-Set-If-NotExist-Example-Header value 
+            header ~X-Replace-Header-Value value replace_with_this
+            header ~>X-Replace-Header-Value-With-Defer value replace_with_this
+
+        }
+
+        # This is comment
+        # This is comment
+
+    }
+    # This is comment
+    example.com {
+        # This is comment
+
+        route /blog/** {
+        # This is comment
+
+            proxy http://blog.example.com
+            gzip
+            cache 5m
+        # This is comment
+
+        }
+        # This is comment
+        
+        route /admin {
+        # This is comment
+
+            proxy http://admin.example.com
+        # This is comment
+
+            auth superuser secret
+        # This is comment
+
+        }
+        # This is comment
+
+    }
+"#;
+            assert_eq!(
+                parse_config(input),
+                Ok((
+                    "\n",
+                    vec![
+                        types::VirtualHost {
+                            domain: "localhost".to_string(),
+                            routes: vec![
+                                types::Route {
+                                    path: "/".to_string(),
+                                    handler: types::Handler::File("index.html".to_string()),
+                                    middlewares: vec![
+                                        types::Middleware::Gzip,
+                                        types::Middleware::Log,
+                                        types::Middleware::Auth {
+                                            username: "admin".to_string(),
+                                            password: "password123".to_string(),
+                                        },
+                                        types::Middleware::Cache("30s".to_string()),
+                                    ],
+                                },
+                                types::Route {
+                                    path: "/api/**".to_string(),
+                                    handler: types::Handler::Proxy(
+                                        "http://localhost:3000".to_string()
+                                    ),
+                                    middlewares: vec![
+                                        types::Middleware::Cors,
+                                        types::Middleware::RateLimit(10),
+                                    ],
+                                },
+                                types::Route {
+                                    path: "/static-response".to_string(),
+                                    handler: types::Handler::Respond {
+                                        status: None,
+                                        body: Some("Hello, world!".to_string()),
+                                    },
+                                    middlewares: vec![],
+                                },
+                                types::Route {
+                                    path: "/health".to_string(),
+                                    handler: types::Handler::Respond {
+                                        status: Some(200),
+                                        body: None,
+                                    },
+                                    middlewares: vec![],
+                                },
+                                types::Route {
+                                    path: "/secret".to_string(),
+                                    handler: types::Handler::Respond {
+                                        status: Some(403),
+                                        body: Some("Access Denied".to_string()),
+                                    },
+                                    middlewares: vec![],
+                                },
+                                types::Route {
+                                    path: "/old-path".to_string(),
+                                    handler: types::Handler::Redirect {
+                                        status_code: None,
+                                        path: Some("/new-path".to_string()),
+                                    },
+                                    middlewares: vec![],
+                                },
+                                types::Route {
+                                    path: "/old-path-with-status".to_string(),
+                                    handler: types::Handler::Redirect {
+                                        status_code: Some(301),
+                                        path: Some("/new-path".to_string()),
+                                    },
+                                    middlewares: vec![],
+                                },
+                                types::Route {
+                                    path: "/example".to_string(),
+                                    handler: types::Handler::Respond {
+                                        status: Some(200),
+                                        body: Some("<h1>Example</h1>".to_string()),
+                                    },
+                                    middlewares: vec![
+                                        types::Middleware::Header {
+                                            operator: types::HeaderOperator::Set,
+                                            name: "X-Set-Or-Overwrite-Example-Header".to_string(),
+                                            value: Some("value".to_string()),
+                                            replace_with: None,
+                                        },
+                                        types::Middleware::Header {
+                                            operator: types::HeaderOperator::DeferSet,
+                                            name: "X-Set-With-defer".to_string(),
+                                            value: Some("value".to_string()),
+                                            replace_with: None,
+                                        },
+                                        types::Middleware::Header {
+                                            operator: types::HeaderOperator::Delete,
+                                            name: "X-Delete-Example-Header".to_string(),
+                                            value: None,
+                                            replace_with: None,
+                                        },
+                                        types::Middleware::Header {
+                                            operator: types::HeaderOperator::Add,
+                                            name: "X-Add-Example-Header".to_string(),
+                                            value: Some("value".to_string()),
+                                            replace_with: None,
+                                        },
+                                        types::Middleware::Header {
+                                            operator: types::HeaderOperator::Default,
+                                            name: "X-Set-If-NotExist-Example-Header".to_string(),
+                                            value: Some("value".to_string()),
+                                            replace_with: None,
+                                        },
+                                        types::Middleware::Header {
+                                            operator: types::HeaderOperator::Replace,
+                                            name: "X-Replace-Header-Value".to_string(),
+                                            value: Some("value".to_string()),
+                                            replace_with: Some("replace_with_this".to_string()),
+                                        },
+                                        types::Middleware::Header {
+                                            operator: types::HeaderOperator::DeferReplace,
+                                            name: "X-Replace-Header-Value-With-Defer".to_string(),
+                                            value: Some("value".to_string()),
+                                            replace_with: Some("replace_with_this".to_string()),
+                                        },
+                                    ],
+                                },
+                            ],
+                        },
+                        types::VirtualHost {
+                            domain: "example.com".to_string(),
+                            routes: vec![
+                                types::Route {
+                                    path: "/blog/**".to_string(),
+                                    handler: types::Handler::Proxy(
+                                        "http://blog.example.com".to_string()
+                                    ),
+                                    middlewares: vec![
+                                        types::Middleware::Gzip,
+                                        types::Middleware::Cache("5m".to_string()),
+                                    ],
+                                },
+                                types::Route {
+                                    path: "/admin".to_string(),
+                                    handler: types::Handler::Proxy(
+                                        "http://admin.example.com".to_string()
+                                    ),
+                                    middlewares: vec![types::Middleware::Auth {
+                                        username: "superuser".to_string(),
+                                        password: "secret".to_string(),
+                                    },],
+                                },
+                            ],
+                        },
+                    ]
+                ))
+            );
         }
     }
 }
