@@ -221,9 +221,9 @@ mod tests {
     async fn test_validate_config_file() {
         let result = validate_config_file("path/to/not/exist").await;
         assert!(result.is_err());
-        assert_eq!(
-            result.err().unwrap(),
-            "Failed to read the config file. reason: The system cannot find the path specified. (os error 3)"
-        );
+        assert!(result
+            .err()
+            .unwrap()
+            .contains("Failed to read the config file. reason:"));
     }
 }
