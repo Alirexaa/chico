@@ -10,6 +10,10 @@ documentation.workspace = true
 [dependencies]
 nom = "7"
 
+[dev-dependencies]
+rstest = "0.24.0"
+
+
 [lints]
 workspace = true
 
