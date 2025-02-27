@@ -5,9 +5,10 @@ use nom::{
     bytes::complete::{tag, take_while1},
     character::complete::{char, digit1, multispace0, none_of, not_line_ending, space1},
     combinator::{map, opt},
+    error::{Error, ErrorKind},
     multi::many0,
     sequence::{delimited, preceded, tuple},
-    IResult,
+    Err, IResult,
 };
 
 mod types;
@@ -271,16 +272,24 @@ fn string_literal(input: &str) -> IResult<&str, String> {
 fn parse_u16(input: &str) -> IResult<&str, u16> {
     // We use digit1 to ensure we have at least one digit
     let (input, _) = multispace0(input)?;
-    let (input, digits) = digit1(input)?;
+    let (input, digits) = take_while1(|c: char| !c.is_whitespace())(input)?;
+    let (remaining, digits) = digit1(digits)?;
+
+    // Ensure there are no additional characters after the digits
+    if !remaining.is_empty() {
+        return Err(Err::Error(Error::new(input, ErrorKind::Digit)));
+    }
 
     // Convert the digits string to a u16
     // This will return an error if the value is too large for u16
     let value = digits
         .parse::<u16>()
-        .map_err(|_| nom::Err::Error((input, nom::error::ErrorKind::Digit)))
-        .unwrap();
+        .map_err(|_| nom::Err::Error((input, nom::error::ErrorKind::Digit)));
 
-    Ok((input, value))
+    match value {
+        Ok(v) => Ok((input, v)),
+        Err(_e) => Err(Err::Error(Error::new(input, ErrorKind::Digit))),
+    }
 }
 
 /// Parses a string literal and an unsigned 16-bit integer (u16) example: "Some String" 123
@@ -299,7 +308,7 @@ fn parse_string_u16(input: &str) -> IResult<&str, (&str, u16)> {
 #[cfg(test)]
 mod tests {
 
-    use crate::{parse_literal_u16, parse_string_u16, string_literal};
+    use crate::{parse_literal_u16, parse_string_u16, parse_u16, string_literal};
 
     mod comments {
         use crate::parse_comment;
@@ -859,5 +868,24 @@ mod tests {
         assert!(parse_literal_u16("\"Mismatched' 200").is_err());
         assert!(parse_literal_u16("\"Valid String\" -200").is_err());
         assert!(parse_literal_u16("\"Valid String\" abc").is_err());
+    }
+
+    #[test]
+    fn test_parse_u16_success() {
+        assert_eq!(parse_u16("123"), Ok(("", 123)));
+        assert_eq!(parse_u16("0"), Ok(("", 0)));
+        assert_eq!(parse_u16("65535"), Ok(("", 65535)));
+        assert_eq!(parse_u16("  42"), Ok(("", 42)));
+        assert_eq!(parse_u16("\n99"), Ok(("", 99)));
+    }
+
+    #[test]
+    fn test_parse_u16_failure() {
+        assert!(parse_u16("").is_err());
+        assert!(parse_u16(" ").is_err());
+        assert!(parse_u16("abc").is_err());
+        assert!(parse_u16("-123").is_err());
+        assert!(parse_u16("123456").is_err()); // Out of range for u16
+        assert!(parse_u16("12.34").is_err());
     }
 }
