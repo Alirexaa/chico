@@ -217,7 +217,7 @@ fn parse_value(input: &str) -> IResult<&str, String> {
     Ok((input, value.to_string()))
 }
 
-// Parses values like "index.html" or "http://localhost:3000"
+// Parses values like " 200" or " "<h1>Example</h1>" 200" or " "<h1>Example</h1>""
 fn parse_respond_handler_args(input: &str) -> IResult<&str, (Option<u16>, Option<String>)> {
     let (input, _) = space1(input)?;
 
@@ -299,7 +299,7 @@ fn parse_string_u16(input: &str) -> IResult<&str, (&str, u16)> {
 #[cfg(test)]
 mod tests {
 
-    use crate::{parse_string_u16, string_literal};
+    use crate::{parse_literal_u16, parse_string_u16, string_literal};
 
     mod comments {
         use crate::parse_comment;
@@ -832,5 +832,32 @@ mod tests {
         assert!(string_literal("unopened\"").is_err());
         assert!(string_literal("\"mismatched'").is_err());
         assert!(string_literal("").is_err());
+    }
+
+    #[test]
+    fn test_parse_literal_u16_success() {
+        assert_eq!(
+            parse_literal_u16("\"<h1>Example</h1>\" 200"),
+            Ok(("", ("<h1>Example</h1>".to_string(), 200)))
+        );
+        assert_eq!(
+            parse_literal_u16("\"Hello, World!\" 404"),
+            Ok(("", ("Hello, World!".to_string(), 404)))
+        );
+        assert_eq!(
+            parse_literal_u16("\"Test String\" 500"),
+            Ok(("", ("Test String".to_string(), 500)))
+        );
+    }
+
+    #[test]
+    fn test_parse_literal_u16_failure() {
+        assert!(parse_literal_u16("").is_err());
+        assert!(parse_literal_u16(" ").is_err());
+        assert!(parse_literal_u16("\"Unclosed").is_err());
+        assert!(parse_literal_u16("Unopened\"").is_err());
+        assert!(parse_literal_u16("\"Mismatched' 200").is_err());
+        assert!(parse_literal_u16("\"Valid String\" -200").is_err());
+        assert!(parse_literal_u16("\"Valid String\" abc").is_err());
     }
 }
