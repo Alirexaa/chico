@@ -640,9 +640,8 @@ mod tests {
     }
 
     mod middlewares {
-        use rstest::rstest;
-
         use crate::{parse_auth, parse_cache, parse_header, parse_middleware, types};
+        use rstest::rstest;
         #[test]
         fn test_parse_middleware_gzip() {
             assert_eq!(parse_middleware("gzip"), Ok(("", types::Middleware::Gzip)));
@@ -887,5 +886,37 @@ mod tests {
         assert!(parse_u16("-123").is_err());
         assert!(parse_u16("123456").is_err()); // Out of range for u16
         assert!(parse_u16("12.34").is_err());
+    }
+
+    mod values {
+        use crate::parse_value;
+
+        #[test]
+        fn test_parse_value_success() {
+            assert_eq!(
+                parse_value(" index.html"),
+                Ok(("", "index.html".to_string()))
+            );
+            assert_eq!(
+                parse_value(" http://localhost:3000"),
+                Ok(("", "http://localhost:3000".to_string()))
+            );
+            assert_eq!(
+                parse_value(" /path/to/file"),
+                Ok(("", "/path/to/file".to_string()))
+            );
+            assert_eq!(
+                parse_value(" some_value"),
+                Ok(("", "some_value".to_string()))
+            );
+        }
+
+        #[test]
+        fn test_parse_value_failure() {
+            assert!(parse_value("").is_err());
+            assert!(parse_value(" ").is_err());
+            assert!(parse_value("\t").is_err());
+            assert!(parse_value("\n").is_err());
+        }
     }
 }
