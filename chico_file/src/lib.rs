@@ -994,7 +994,6 @@ mod tests {
 
     mod values {
         use crate::parse_value;
-
         #[test]
         fn test_parse_value_success() {
             assert_eq!(
@@ -1021,6 +1020,152 @@ mod tests {
             assert!(parse_value(" ").is_err());
             assert!(parse_value("\t").is_err());
             assert!(parse_value("\n").is_err());
+        }
+    }
+
+    mod virtual_host {
+        mod virtual_host {
+            use crate::{parse_virtual_host, types};
+
+            #[test]
+            fn test_parse_virtual_host_success() {
+                let input = r#"
+                example.com {
+                    route / {
+                        file index.html
+                    }
+                }
+                "#;
+
+                assert_eq!(
+                    parse_virtual_host(input),
+                    Ok((
+                        "\n                ",
+                        types::VirtualHost {
+                            domain: "example.com".to_string(),
+                            routes: vec![types::Route {
+                                path: "/".to_string(),
+                                handler: types::Handler::File("index.html".to_string()),
+                                middlewares: vec![],
+                            }],
+                        }
+                    ))
+                );
+            }
+
+            #[test]
+            fn test_parse_virtual_host_with_multiple_routes() {
+                let input = r#"
+                example.com {
+                    route / {
+                        file index.html
+                    }
+                    route /about {
+                        file about.html
+                    }
+                }
+                "#;
+
+                assert_eq!(
+                    parse_virtual_host(input),
+                    Ok((
+                        "\n                ",
+                        types::VirtualHost {
+                            domain: "example.com".to_string(),
+                            routes: vec![
+                                types::Route {
+                                    path: "/".to_string(),
+                                    handler: types::Handler::File("index.html".to_string()),
+                                    middlewares: vec![],
+                                },
+                                types::Route {
+                                    path: "/about".to_string(),
+                                    handler: types::Handler::File("about.html".to_string()),
+                                    middlewares: vec![],
+                                },
+                            ],
+                        }
+                    ))
+                );
+            }
+
+            #[test]
+            fn test_parse_virtual_host_with_comments() {
+                let input = r#"
+                example.com {
+                    # Another comment
+                    route / {
+                        file index.html
+                    }
+                    # Comment between routes
+                    route /about {
+                        file about.html
+                    }
+                }
+                "#;
+
+                assert_eq!(
+                    parse_virtual_host(input),
+                    Ok((
+                        "\n                ",
+                        types::VirtualHost {
+                            domain: "example.com".to_string(),
+                            routes: vec![
+                                types::Route {
+                                    path: "/".to_string(),
+                                    handler: types::Handler::File("index.html".to_string()),
+                                    middlewares: vec![],
+                                },
+                                types::Route {
+                                    path: "/about".to_string(),
+                                    handler: types::Handler::File("about.html".to_string()),
+                                    middlewares: vec![],
+                                },
+                            ],
+                        }
+                    ))
+                );
+            }
+
+            #[test]
+            fn test_parse_virtual_host_with_middleware() {
+                let input = r#"
+                example.com {
+                    route / {
+                        file index.html
+                        gzip
+                        cors
+                    }
+                }
+                "#;
+
+                assert_eq!(
+                    parse_virtual_host(input),
+                    Ok((
+                        "\n                ",
+                        types::VirtualHost {
+                            domain: "example.com".to_string(),
+                            routes: vec![types::Route {
+                                path: "/".to_string(),
+                                handler: types::Handler::File("index.html".to_string()),
+                                middlewares: vec![types::Middleware::Gzip, types::Middleware::Cors],
+                            }],
+                        }
+                    ))
+                );
+            }
+
+            #[test]
+            fn test_parse_virtual_host_failure() {
+                let input = r#"
+                example.com {
+                    route / {
+                        file index.html
+                    }
+                "#; // Missing closing brace
+
+                assert!(parse_virtual_host(input).is_err());
+            }
         }
     }
 }
