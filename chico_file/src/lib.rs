@@ -309,8 +309,6 @@ fn parse_string_u16(input: &str) -> IResult<&str, (&str, u16)> {
 #[cfg(test)]
 mod tests {
 
-    use crate::{parse_literal_u16, parse_string_u16, parse_u16, string_literal};
-
     mod comments {
         use crate::parse_comment;
 
@@ -898,96 +896,100 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_parse_string_u16_success() {
-        assert_eq!(
-            parse_string_u16("http://localhost:3000 200"),
-            Ok(("", ("http://localhost:3000", 200)))
-        );
-        assert_eq!(parse_string_u16("/blog 403"), Ok(("", ("/blog", 403))));
-        assert_eq!(parse_string_u16("** 101"), Ok(("", ("**", 101))));
-        assert_eq!(parse_string_u16("{value} 404"), Ok(("", ("{value}", 404))));
-        assert_eq!(
-            parse_string_u16("about-us 301"),
-            Ok(("", ("about-us", 301)))
-        );
-    }
+    mod utils {
+        use crate::{parse_literal_u16, parse_string_u16, parse_u16, string_literal};
 
-    #[test]
-    fn test_parse_string_u16_failure() {
-        assert!(parse_string_u16("").is_err());
-        assert!(parse_string_u16(" ").is_err());
-        assert!(parse_string_u16("http://localhost:3000").is_err());
-        assert!(parse_string_u16("3000").is_err());
-        assert!(parse_string_u16("http://localhost:3000 abc").is_err());
-        assert!(parse_string_u16("http://localhost:3000 -200").is_err());
-    }
+        #[test]
+        fn test_parse_string_u16_success() {
+            assert_eq!(
+                parse_string_u16("http://localhost:3000 200"),
+                Ok(("", ("http://localhost:3000", 200)))
+            );
+            assert_eq!(parse_string_u16("/blog 403"), Ok(("", ("/blog", 403))));
+            assert_eq!(parse_string_u16("** 101"), Ok(("", ("**", 101))));
+            assert_eq!(parse_string_u16("{value} 404"), Ok(("", ("{value}", 404))));
+            assert_eq!(
+                parse_string_u16("about-us 301"),
+                Ok(("", ("about-us", 301)))
+            );
+        }
 
-    #[test]
-    fn test_string_literal_success() {
-        assert_eq!(string_literal("\"hello\""), Ok(("", "hello".to_string())));
-        assert_eq!(string_literal("\"world\""), Ok(("", "world".to_string())));
-        assert_eq!(string_literal("\"12345\""), Ok(("", "12345".to_string())));
-        assert_eq!(string_literal("\"!@#$%\""), Ok(("", "!@#$%".to_string())));
-        assert_eq!(
-            string_literal("\"with spaces\""),
-            Ok(("", "with spaces".to_string()))
-        );
-    }
+        #[test]
+        fn test_parse_string_u16_failure() {
+            assert!(parse_string_u16("").is_err());
+            assert!(parse_string_u16(" ").is_err());
+            assert!(parse_string_u16("http://localhost:3000").is_err());
+            assert!(parse_string_u16("3000").is_err());
+            assert!(parse_string_u16("http://localhost:3000 abc").is_err());
+            assert!(parse_string_u16("http://localhost:3000 -200").is_err());
+        }
 
-    #[test]
-    fn test_string_literal_failure() {
-        assert!(string_literal("hello").is_err());
-        assert!(string_literal("\"unclosed").is_err());
-        assert!(string_literal("unopened\"").is_err());
-        assert!(string_literal("\"mismatched'").is_err());
-        assert!(string_literal("").is_err());
-    }
+        #[test]
+        fn test_string_literal_success() {
+            assert_eq!(string_literal("\"hello\""), Ok(("", "hello".to_string())));
+            assert_eq!(string_literal("\"world\""), Ok(("", "world".to_string())));
+            assert_eq!(string_literal("\"12345\""), Ok(("", "12345".to_string())));
+            assert_eq!(string_literal("\"!@#$%\""), Ok(("", "!@#$%".to_string())));
+            assert_eq!(
+                string_literal("\"with spaces\""),
+                Ok(("", "with spaces".to_string()))
+            );
+        }
 
-    #[test]
-    fn test_parse_literal_u16_success() {
-        assert_eq!(
-            parse_literal_u16("\"<h1>Example</h1>\" 200"),
-            Ok(("", ("<h1>Example</h1>".to_string(), 200)))
-        );
-        assert_eq!(
-            parse_literal_u16("\"Hello, World!\" 404"),
-            Ok(("", ("Hello, World!".to_string(), 404)))
-        );
-        assert_eq!(
-            parse_literal_u16("\"Test String\" 500"),
-            Ok(("", ("Test String".to_string(), 500)))
-        );
-    }
+        #[test]
+        fn test_string_literal_failure() {
+            assert!(string_literal("hello").is_err());
+            assert!(string_literal("\"unclosed").is_err());
+            assert!(string_literal("unopened\"").is_err());
+            assert!(string_literal("\"mismatched'").is_err());
+            assert!(string_literal("").is_err());
+        }
 
-    #[test]
-    fn test_parse_literal_u16_failure() {
-        assert!(parse_literal_u16("").is_err());
-        assert!(parse_literal_u16(" ").is_err());
-        assert!(parse_literal_u16("\"Unclosed").is_err());
-        assert!(parse_literal_u16("Unopened\"").is_err());
-        assert!(parse_literal_u16("\"Mismatched' 200").is_err());
-        assert!(parse_literal_u16("\"Valid String\" -200").is_err());
-        assert!(parse_literal_u16("\"Valid String\" abc").is_err());
-    }
+        #[test]
+        fn test_parse_literal_u16_success() {
+            assert_eq!(
+                parse_literal_u16("\"<h1>Example</h1>\" 200"),
+                Ok(("", ("<h1>Example</h1>".to_string(), 200)))
+            );
+            assert_eq!(
+                parse_literal_u16("\"Hello, World!\" 404"),
+                Ok(("", ("Hello, World!".to_string(), 404)))
+            );
+            assert_eq!(
+                parse_literal_u16("\"Test String\" 500"),
+                Ok(("", ("Test String".to_string(), 500)))
+            );
+        }
 
-    #[test]
-    fn test_parse_u16_success() {
-        assert_eq!(parse_u16("123"), Ok(("", 123)));
-        assert_eq!(parse_u16("0"), Ok(("", 0)));
-        assert_eq!(parse_u16("65535"), Ok(("", 65535)));
-        assert_eq!(parse_u16("  42"), Ok(("", 42)));
-        assert_eq!(parse_u16("\n99"), Ok(("", 99)));
-    }
+        #[test]
+        fn test_parse_literal_u16_failure() {
+            assert!(parse_literal_u16("").is_err());
+            assert!(parse_literal_u16(" ").is_err());
+            assert!(parse_literal_u16("\"Unclosed").is_err());
+            assert!(parse_literal_u16("Unopened\"").is_err());
+            assert!(parse_literal_u16("\"Mismatched' 200").is_err());
+            assert!(parse_literal_u16("\"Valid String\" -200").is_err());
+            assert!(parse_literal_u16("\"Valid String\" abc").is_err());
+        }
 
-    #[test]
-    fn test_parse_u16_failure() {
-        assert!(parse_u16("").is_err());
-        assert!(parse_u16(" ").is_err());
-        assert!(parse_u16("abc").is_err());
-        assert!(parse_u16("-123").is_err());
-        assert!(parse_u16("123456").is_err()); // Out of range for u16
-        assert!(parse_u16("12.34").is_err());
+        #[test]
+        fn test_parse_u16_success() {
+            assert_eq!(parse_u16("123"), Ok(("", 123)));
+            assert_eq!(parse_u16("0"), Ok(("", 0)));
+            assert_eq!(parse_u16("65535"), Ok(("", 65535)));
+            assert_eq!(parse_u16("  42"), Ok(("", 42)));
+            assert_eq!(parse_u16("\n99"), Ok(("", 99)));
+        }
+
+        #[test]
+        fn test_parse_u16_failure() {
+            assert!(parse_u16("").is_err());
+            assert!(parse_u16(" ").is_err());
+            assert!(parse_u16("abc").is_err());
+            assert!(parse_u16("-123").is_err());
+            assert!(parse_u16("123456").is_err()); // Out of range for u16
+            assert!(parse_u16("12.34").is_err());
+        }
     }
 
     mod values {
