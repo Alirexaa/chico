@@ -17,6 +17,7 @@ async fn main() {
                     eprintln!("{}", err);
                     exit(1);
                 });
+            println!("✅✅✅ Specified config is valid.");
             exit(0);
         }
     }

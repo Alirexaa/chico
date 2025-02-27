@@ -16,6 +16,8 @@ tokio = { version = "1" , features = ["full"]}
 rstest = "0.24.0"
 assert_cmd = "2.0"
 tempfile = "3"
+predicates = "3.1.3"
+
 
 [lints]
 workspace = true
@@ -24,3 +26,7 @@ workspace = true
 # Treat warnings as a build error.
 strict = []
 default = ["strict"] 
+
+[[bin]]
+name = "chico"
+path = "src/main.rs"
