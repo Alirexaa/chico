@@ -11,7 +11,7 @@ use nom::{
     Err, IResult,
 };
 
-mod types;
+pub mod types;
 
 // Parses a single-line comment like "# this is a comment"
 fn parse_comment(input: &str) -> IResult<&str, ()> {
