@@ -34,7 +34,7 @@ mod tests {
 
         match cli.command {
             Commands::Validate { config } => assert_eq!(config, "/path/to/file"),
-            _ => panic!("Expected 'New' command"),
+            _ => panic!("Expected 'Validate' command"),
         }
     }
 }
