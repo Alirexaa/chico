@@ -1,5 +1,5 @@
 [workspace]
-members = ["chico_file","chico_server","chico_cli",]
+members = ["chico_file","chico_server"]
 resolver = "2"
 
 [workspace.package]
