@@ -70,7 +70,10 @@ fn parse_with_validate(content: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+
     use rstest::rstest;
+    use tempfile::NamedTempFile;
 
     use crate::{config::parse_with_validate, validate_config_file};
 
@@ -218,12 +221,52 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_validate_config_file() {
+    async fn test_validate_config_file_path_not_exist() {
         let result = validate_config_file("path/to/not/exist").await;
         assert!(result.is_err());
         assert!(result
             .err()
             .unwrap()
             .contains("Failed to read the config file. reason:"));
+    }
+
+    #[tokio::test]
+    async fn test_validate_config_file_empty_file() {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        let _ = temp_file.write_all(b"");
+        let temp_file_path = temp_file.path();
+        let temp_dir_path = temp_file_path.to_str().unwrap();
+        let result = validate_config_file(temp_dir_path).await;
+        assert!(result.is_err());
+        assert_eq!(
+            result.err().unwrap(),
+            "Failed to parse content. reason : content is empty."
+        );
+    }
+
+    #[tokio::test]
+    async fn test_validate_config_file_valid_file() {
+        let content = r#"
+        localhost {
+            route / {
+                file index.html
+            }
+        }
+        example.com {
+            route / {
+                file index.html
+            }
+        }
+        "#;
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+
+        let _ = &temp_file.write_all(content.as_bytes());
+
+        let temp_file_path = temp_file.path();
+        let temp_file_path = temp_file_path.to_str().unwrap();
+
+        let result = validate_config_file(temp_file_path).await;
+        assert_eq!(result, Ok(()));
     }
 }
