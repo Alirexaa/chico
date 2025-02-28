@@ -1,22 +1,26 @@
 use chico_file::types::VirtualHost;
+use respond::RespondHandler;
+
+mod respond;
 
 #[allow(dead_code)]
 pub trait RequestHandler {
-    fn handle(_request: hyper::Request<()>) -> hyper::Response<()> {
-        todo!();
-    }
+    fn handle(&self, _request: hyper::Request<()>) -> hyper::Response<()>;
 }
 
 pub struct NullRequestHandler {}
 
 impl RequestHandler for NullRequestHandler {
-    fn handle(_request: hyper::Request<()>) -> hyper::Response<()> {
+    fn handle(&self, _request: hyper::Request<()>) -> hyper::Response<()> {
         std::todo!();
     }
 }
 
 #[allow(dead_code)]
-pub fn select_handler(request: &hyper::Request<()>, vhs: Vec<VirtualHost>) -> impl RequestHandler {
+pub fn select_handler(
+    request: &hyper::Request<()>,
+    vhs: Vec<VirtualHost>,
+) -> Box<dyn RequestHandler> {
     //todo handle unwrap
     let host = request.headers().get(http::header::HOST).unwrap();
     let vh = vhs
@@ -30,8 +34,10 @@ pub fn select_handler(request: &hyper::Request<()>, vhs: Vec<VirtualHost>) -> im
         .find(|&r| r.path == request.uri().path())
         .unwrap();
 
-    _ = match route.handler {
-        chico_file::types::Handler::File(_) => todo!(),
+    let handler: Box<dyn RequestHandler> = match route.handler {
+        chico_file::types::Handler::File(_) => Box::new(RespondHandler {
+            handler: route.handler.clone(),
+        }),
         chico_file::types::Handler::Proxy(_) => todo!(),
         chico_file::types::Handler::Dir(_) => todo!(),
         chico_file::types::Handler::Browse(_) => todo!(),
@@ -42,6 +48,5 @@ pub fn select_handler(request: &hyper::Request<()>, vhs: Vec<VirtualHost>) -> im
         } => todo!(),
     };
 
-    #[allow(unreachable_code)]
-    NullRequestHandler {}
+    handler
 }

@@ -11,7 +11,7 @@ pub struct Route {
     pub middlewares: Vec<Middleware>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Handler {
     File(String),
     Proxy(String),
@@ -25,6 +25,22 @@ pub enum Handler {
         path: Option<String>,
         status_code: Option<u16>,
     },
+}
+
+impl Handler {
+    pub fn type_name(&self) -> &str {
+        match self {
+            Handler::File(_) => "File",
+            Handler::Proxy(_) => "Proxy",
+            Handler::Dir(_) => "Dir",
+            Handler::Browse(_) => "Browse",
+            Handler::Respond { status: _, body: _ } => "Respond",
+            Handler::Redirect {
+                path: _,
+                status_code: _,
+            } => "Redirect",
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
