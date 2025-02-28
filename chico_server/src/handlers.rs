@@ -2,7 +2,7 @@ use chico_file::types::VirtualHost;
 
 #[allow(dead_code)]
 pub trait RequestHandler {
-    fn handel(_request: hyper::Request<()>) -> hyper::Response<()> {
+    fn handle(_request: hyper::Request<()>) -> hyper::Response<()> {
         todo!();
     }
 }
@@ -10,14 +10,14 @@ pub trait RequestHandler {
 pub struct NullRequestHandler {}
 
 impl RequestHandler for NullRequestHandler {
-    fn handel(_request: hyper::Request<()>) -> hyper::Response<()> {
+    fn handle(_request: hyper::Request<()>) -> hyper::Response<()> {
         std::todo!();
     }
 }
 
 #[allow(dead_code)]
 pub fn select_handler(request: &hyper::Request<()>, vhs: Vec<VirtualHost>) -> impl RequestHandler {
-    //todo handel unwarp
+    //todo handle unwrap
     let host = request.headers().get(http::header::HOST).unwrap();
     let vh = vhs
         .iter()
