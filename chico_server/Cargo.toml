@@ -11,6 +11,8 @@ documentation.workspace = true
 chico_file = { path = "../chico_file" }
 clap = { version = "4.5", features = ["derive"] }
 tokio = { version = "1" , features = ["full"]}
+hyper = { version = "1", features = ["full"] }
+http = "1.0"
 
 [dev-dependencies]
 rstest = "0.24.0"

@@ -5,6 +5,7 @@ use clap::Parser;
 use config::validate_config_file;
 mod cli;
 mod config;
+mod handlers;
 #[tokio::main]
 async fn main() {
     let cli = cli::CLI::parse();
