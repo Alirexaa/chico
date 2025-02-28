@@ -1,5 +1,7 @@
 use chico_file::types;
 use http::{status, Response};
+use http_body_util::Full;
+use hyper::body::Bytes;
 
 use super::RequestHandler;
 
@@ -9,12 +11,18 @@ pub struct RespondHandler {
 }
 
 impl RequestHandler for RespondHandler {
-    fn handle(&self, _request: hyper::Request<()>) -> hyper::Response<()> {
+    fn handle(
+        &self,
+        _request: hyper::Request<hyper::body::Incoming>,
+    ) -> hyper::Response<Full<Bytes>> {
         if let types::Handler::Respond { status, body } = &self.handler {
             let status = status.unwrap_or(status::StatusCode::OK.as_u16());
-            let _body = body.as_ref().unwrap_or(&"".to_string());
+            let body = body.as_ref().unwrap_or(&"".to_string()).clone();
 
-            Response::builder().status(status).body(()).unwrap()
+            Response::builder()
+                .status(status)
+                .body(Full::new(Bytes::from(body)))
+                .unwrap()
         } else {
             unimplemented!(
                 "Only respond handler is supported. Given handler was {:}",
