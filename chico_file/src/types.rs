@@ -1,4 +1,9 @@
 #[derive(Debug, PartialEq)]
+pub struct Config {
+    pub virtual_hosts: Vec<VirtualHost>,
+}
+
+#[derive(Debug, PartialEq)]
 pub struct VirtualHost {
     pub domain: String,
     pub routes: Vec<Route>,
