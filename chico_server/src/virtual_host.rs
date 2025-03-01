@@ -36,7 +36,6 @@ mod tests {
     #[case("/api/*", "/api/products/get")]
     #[case("/api/products/*", "/api/products/get")]
     #[case("/api/products/get/*", "/api/products/get/1")]
-
     fn test_find_route_success(#[case] path: &str, #[case] search_value: &str) {
         use crate::virtual_host::VirtualHostExt;
         use chico_file::types::{Handler, Route, VirtualHost};
