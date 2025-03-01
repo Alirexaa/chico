@@ -21,7 +21,7 @@ impl RequestHandler for NullRequestHandler {
 pub fn select_handler(request: &hyper::Request<()>, config: Config) -> impl RequestHandler {
     //todo handle unwrap
     let host = request.headers().get(http::header::HOST).unwrap();
-    let vh = &config.find_virtual_host(host.to_str().unwrap().to_string());
+    let vh = &config.find_virtual_host(host.to_str().unwrap());
 
     if vh.is_none() {
         todo!("abort connection in this case");
@@ -29,7 +29,7 @@ pub fn select_handler(request: &hyper::Request<()>, config: Config) -> impl Requ
 
     let vh = vh.unwrap();
 
-    let route = vh.find_route(request.uri().path().to_string());
+    let route = vh.find_route(request.uri().path());
 
     if route.is_none() {
         todo!("abort connection in this case");

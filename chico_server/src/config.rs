@@ -4,12 +4,12 @@ use chico_file::{
 };
 
 pub trait ConfigExt {
-    fn find_virtual_host(&self, path: String) -> Option<&VirtualHost>;
+    fn find_virtual_host(&self, path: &str) -> Option<&VirtualHost>;
     // Define trait methods here
 }
 
 impl ConfigExt for Config {
-    fn find_virtual_host(&self, path: String) -> Option<&VirtualHost> {
+    fn find_virtual_host(&self, path: &str) -> Option<&VirtualHost> {
         //todo: do more advance search and pattern matching for virtual host
 
         let vh = self.virtual_hosts.iter().find(|&vh| vh.domain == path);

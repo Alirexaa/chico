@@ -1,11 +1,11 @@
 use chico_file::types::{Route, VirtualHost};
 
 pub trait VirtualHostExt {
-    fn find_route(&self, path: String) -> Option<&Route>;
+    fn find_route(&self, path: &str) -> Option<&Route>;
 }
 
 impl VirtualHostExt for VirtualHost {
-    fn find_route(&self, path: String) -> Option<&Route> {
+    fn find_route(&self, path: &str) -> Option<&Route> {
         //todo: do more advance search and pattern matching for request path
         let route = self.routes.iter().find(|&r| {
             if r.path.ends_with("/*") {
@@ -52,10 +52,7 @@ mod tests {
             routes: vec![route1.clone()],
         };
 
-        assert_eq!(
-            Some(&route1),
-            virtual_hosts.find_route(search_value.to_string())
-        )
+        assert_eq!(Some(&route1), virtual_hosts.find_route(search_value))
     }
 
     #[rstest]
@@ -83,6 +80,6 @@ mod tests {
             routes: vec![route1.clone()],
         };
 
-        assert_eq!(None, virtual_hosts.find_route(search_value.to_string()))
+        assert_eq!(None, virtual_hosts.find_route(search_value))
     }
 }
