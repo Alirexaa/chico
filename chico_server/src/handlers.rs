@@ -1,4 +1,6 @@
-use chico_file::types::VirtualHost;
+use chico_file::types::Config;
+
+use crate::{config::ConfigExt, virtual_host::VirtualHostExt};
 
 #[allow(dead_code)]
 pub trait RequestHandler {
@@ -16,19 +18,24 @@ impl RequestHandler for NullRequestHandler {
 }
 
 #[allow(dead_code)]
-pub fn select_handler(request: &hyper::Request<()>, vhs: Vec<VirtualHost>) -> impl RequestHandler {
+pub fn select_handler(request: &hyper::Request<()>, config: Config) -> impl RequestHandler {
     //todo handle unwrap
     let host = request.headers().get(http::header::HOST).unwrap();
-    let vh = vhs
-        .iter()
-        .find(|&vh| vh.domain == host.to_str().unwrap())
-        .unwrap();
+    let vh = &config.find_virtual_host(host.to_str().unwrap().to_string());
 
-    let route = vh
-        .routes
-        .iter()
-        .find(|&r| r.path == request.uri().path())
-        .unwrap();
+    if vh.is_none() {
+        todo!("abort connection in this case");
+    }
+
+    let vh = vh.unwrap();
+
+    let route = vh.find_route(request.uri().path().to_string());
+
+    if route.is_none() {
+        todo!("abort connection in this case");
+    }
+
+    let route = route.unwrap();
 
     _ = match route.handler {
         chico_file::types::Handler::File(_) => todo!(),

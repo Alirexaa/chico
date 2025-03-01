@@ -1,4 +1,22 @@
-use chico_file::parse_config;
+use chico_file::{
+    parse_config,
+    types::{Config, VirtualHost},
+};
+
+pub trait ConfigExt {
+    fn find_virtual_host(&self, path: String) -> Option<&VirtualHost>;
+    // Define trait methods here
+}
+
+impl ConfigExt for Config {
+    fn find_virtual_host(&self, path: String) -> Option<&VirtualHost> {
+        //todo: do more advance search and pattern matching for virtual host
+
+        let vh = self.virtual_hosts.iter().find(|&vh| vh.domain == path);
+        vh
+    }
+    // Implement trait methods here
+}
 
 /// Validate the config file content
 pub(crate) async fn validate_config_file(path: &str) -> Result<(), String> {

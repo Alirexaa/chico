@@ -9,14 +9,14 @@ pub struct VirtualHost {
     pub routes: Vec<Route>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Route {
     pub path: String,
     pub handler: Handler,
     pub middlewares: Vec<Middleware>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Handler {
     File(String),
     Proxy(String),
@@ -32,7 +32,7 @@ pub enum Handler {
     },
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Middleware {
     Gzip,
     Cors,

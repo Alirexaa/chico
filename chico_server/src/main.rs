@@ -6,6 +6,7 @@ use config::validate_config_file;
 mod cli;
 mod config;
 mod handlers;
+mod virtual_host;
 #[tokio::main]
 async fn main() {
     let cli = cli::CLI::parse();
