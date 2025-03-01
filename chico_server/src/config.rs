@@ -30,7 +30,7 @@ fn parse_with_validate(content: &str) -> Result<(), String> {
         ));
     }
 
-    let virtual_hosts = parse_result.unwrap().1;
+    let virtual_hosts = parse_result.unwrap().1.virtual_hosts;
 
     if virtual_hosts.is_empty() {
         return Err(format!(
