@@ -10,6 +10,7 @@ use nom::{
     sequence::{delimited, preceded, tuple},
     Err, IResult,
 };
+use types::{Config, VirtualHost};
 
 pub mod types;
 
@@ -250,12 +251,17 @@ fn parse_redirect_handler_args(input: &str) -> IResult<&str, (Option<u16>, Optio
 }
 
 // Parses the entire configuration, allowing comments and empty lines
-pub fn parse_config(input: &str) -> IResult<&str, Vec<types::VirtualHost>> {
-    many1(alt((
+pub fn parse_config(input: &str) -> IResult<&str, Config> {
+    let result: Result<(&str, Vec<VirtualHost>), Err<Error<&str>>> = many1(alt((
         map(parse_virtual_host, Some),
         map(parse_comment, |_| None), // Skip comments
     )))(input)
-    .map(|(i, hosts)| (i, hosts.into_iter().flatten().collect()))
+    .map(|(i, hosts)| (i, hosts.into_iter().flatten().collect()));
+
+    match result {
+        Ok(r) => Ok((r.0, Config { virtual_hosts: r.1 })),
+        Err(e) => Err(e),
+    }
 }
 
 /// Parses a string literal  
@@ -1169,7 +1175,10 @@ mod tests {
     }
 
     mod config {
-        use crate::{parse_config, types};
+        use crate::{
+            parse_config,
+            types::{self, Config},
+        };
 
         #[test]
         fn test_parse_config_single_virtual_host() {
@@ -1185,14 +1194,16 @@ mod tests {
                 parse_config(input),
                 Ok((
                     "\n            ",
-                    vec![types::VirtualHost {
-                        domain: "example.com".to_string(),
-                        routes: vec![types::Route {
-                            path: "/".to_string(),
-                            handler: types::Handler::File("index.html".to_string()),
-                            middlewares: vec![],
-                        }],
-                    }]
+                    Config {
+                        virtual_hosts: vec![types::VirtualHost {
+                            domain: "example.com".to_string(),
+                            routes: vec![types::Route {
+                                path: "/".to_string(),
+                                handler: types::Handler::File("index.html".to_string()),
+                                middlewares: vec![],
+                            }],
+                        }]
+                    }
                 ))
             );
         }
@@ -1216,24 +1227,26 @@ mod tests {
                 parse_config(input),
                 Ok((
                     "\n            ",
-                    vec![
-                        types::VirtualHost {
-                            domain: "example.com".to_string(),
-                            routes: vec![types::Route {
-                                path: "/".to_string(),
-                                handler: types::Handler::File("index.html".to_string()),
-                                middlewares: vec![],
-                            }],
-                        },
-                        types::VirtualHost {
-                            domain: "another.com".to_string(),
-                            routes: vec![types::Route {
-                                path: "/about".to_string(),
-                                handler: types::Handler::File("about.html".to_string()),
-                                middlewares: vec![],
-                            }],
-                        }
-                    ]
+                    Config {
+                        virtual_hosts: vec![
+                            types::VirtualHost {
+                                domain: "example.com".to_string(),
+                                routes: vec![types::Route {
+                                    path: "/".to_string(),
+                                    handler: types::Handler::File("index.html".to_string()),
+                                    middlewares: vec![],
+                                }],
+                            },
+                            types::VirtualHost {
+                                domain: "another.com".to_string(),
+                                routes: vec![types::Route {
+                                    path: "/about".to_string(),
+                                    handler: types::Handler::File("about.html".to_string()),
+                                    middlewares: vec![],
+                                }],
+                            }
+                        ]
+                    }
                 ))
             );
         }
@@ -1259,24 +1272,26 @@ mod tests {
                 parse_config(input),
                 Ok((
                     "\n            ",
-                    vec![
-                        types::VirtualHost {
-                            domain: "example.com".to_string(),
-                            routes: vec![types::Route {
-                                path: "/".to_string(),
-                                handler: types::Handler::File("index.html".to_string()),
-                                middlewares: vec![],
-                            }],
-                        },
-                        types::VirtualHost {
-                            domain: "another.com".to_string(),
-                            routes: vec![types::Route {
-                                path: "/about".to_string(),
-                                handler: types::Handler::File("about.html".to_string()),
-                                middlewares: vec![],
-                            }],
-                        }
-                    ]
+                    Config {
+                        virtual_hosts: vec![
+                            types::VirtualHost {
+                                domain: "example.com".to_string(),
+                                routes: vec![types::Route {
+                                    path: "/".to_string(),
+                                    handler: types::Handler::File("index.html".to_string()),
+                                    middlewares: vec![],
+                                }],
+                            },
+                            types::VirtualHost {
+                                domain: "another.com".to_string(),
+                                routes: vec![types::Route {
+                                    path: "/about".to_string(),
+                                    handler: types::Handler::File("about.html".to_string()),
+                                    middlewares: vec![],
+                                }],
+                            }
+                        ]
+                    }
                 ))
             );
         }
@@ -1297,14 +1312,16 @@ mod tests {
                 parse_config(input),
                 Ok((
                     "\n            ",
-                    vec![types::VirtualHost {
-                        domain: "example.com".to_string(),
-                        routes: vec![types::Route {
-                            path: "/".to_string(),
-                            handler: types::Handler::File("index.html".to_string()),
-                            middlewares: vec![types::Middleware::Gzip, types::Middleware::Cors],
-                        }],
-                    }]
+                    Config {
+                        virtual_hosts: vec![types::VirtualHost {
+                            domain: "example.com".to_string(),
+                            routes: vec![types::Route {
+                                path: "/".to_string(),
+                                handler: types::Handler::File("index.html".to_string()),
+                                middlewares: vec![types::Middleware::Gzip, types::Middleware::Cors],
+                            }],
+                        }]
+                    }
                 ))
             );
         }
@@ -1428,152 +1445,157 @@ mod tests {
                 parse_config(input),
                 Ok((
                     "\n",
-                    vec![
-                        types::VirtualHost {
-                            domain: "localhost".to_string(),
-                            routes: vec![
-                                types::Route {
-                                    path: "/".to_string(),
-                                    handler: types::Handler::File("index.html".to_string()),
-                                    middlewares: vec![
-                                        types::Middleware::Gzip,
-                                        types::Middleware::Log,
-                                        types::Middleware::Auth {
-                                            username: "admin".to_string(),
-                                            password: "password123".to_string(),
-                                        },
-                                        types::Middleware::Cache("30s".to_string()),
-                                    ],
-                                },
-                                types::Route {
-                                    path: "/api/**".to_string(),
-                                    handler: types::Handler::Proxy(
-                                        "http://localhost:3000".to_string()
-                                    ),
-                                    middlewares: vec![
-                                        types::Middleware::Cors,
-                                        types::Middleware::RateLimit(10),
-                                    ],
-                                },
-                                types::Route {
-                                    path: "/static-response".to_string(),
-                                    handler: types::Handler::Respond {
-                                        status: None,
-                                        body: Some("Hello, world!".to_string()),
+                    Config {
+                        virtual_hosts: vec![
+                            types::VirtualHost {
+                                domain: "localhost".to_string(),
+                                routes: vec![
+                                    types::Route {
+                                        path: "/".to_string(),
+                                        handler: types::Handler::File("index.html".to_string()),
+                                        middlewares: vec![
+                                            types::Middleware::Gzip,
+                                            types::Middleware::Log,
+                                            types::Middleware::Auth {
+                                                username: "admin".to_string(),
+                                                password: "password123".to_string(),
+                                            },
+                                            types::Middleware::Cache("30s".to_string()),
+                                        ],
                                     },
-                                    middlewares: vec![],
-                                },
-                                types::Route {
-                                    path: "/health".to_string(),
-                                    handler: types::Handler::Respond {
-                                        status: Some(200),
-                                        body: None,
+                                    types::Route {
+                                        path: "/api/**".to_string(),
+                                        handler: types::Handler::Proxy(
+                                            "http://localhost:3000".to_string()
+                                        ),
+                                        middlewares: vec![
+                                            types::Middleware::Cors,
+                                            types::Middleware::RateLimit(10),
+                                        ],
                                     },
-                                    middlewares: vec![],
-                                },
-                                types::Route {
-                                    path: "/secret".to_string(),
-                                    handler: types::Handler::Respond {
-                                        status: Some(403),
-                                        body: Some("Access Denied".to_string()),
+                                    types::Route {
+                                        path: "/static-response".to_string(),
+                                        handler: types::Handler::Respond {
+                                            status: None,
+                                            body: Some("Hello, world!".to_string()),
+                                        },
+                                        middlewares: vec![],
                                     },
-                                    middlewares: vec![],
-                                },
-                                types::Route {
-                                    path: "/old-path".to_string(),
-                                    handler: types::Handler::Redirect {
-                                        status_code: None,
-                                        path: Some("/new-path".to_string()),
+                                    types::Route {
+                                        path: "/health".to_string(),
+                                        handler: types::Handler::Respond {
+                                            status: Some(200),
+                                            body: None,
+                                        },
+                                        middlewares: vec![],
                                     },
-                                    middlewares: vec![],
-                                },
-                                types::Route {
-                                    path: "/old-path-with-status".to_string(),
-                                    handler: types::Handler::Redirect {
-                                        status_code: Some(301),
-                                        path: Some("/new-path".to_string()),
+                                    types::Route {
+                                        path: "/secret".to_string(),
+                                        handler: types::Handler::Respond {
+                                            status: Some(403),
+                                            body: Some("Access Denied".to_string()),
+                                        },
+                                        middlewares: vec![],
                                     },
-                                    middlewares: vec![],
-                                },
-                                types::Route {
-                                    path: "/example".to_string(),
-                                    handler: types::Handler::Respond {
-                                        status: Some(200),
-                                        body: Some("<h1>Example</h1>".to_string()),
+                                    types::Route {
+                                        path: "/old-path".to_string(),
+                                        handler: types::Handler::Redirect {
+                                            status_code: None,
+                                            path: Some("/new-path".to_string()),
+                                        },
+                                        middlewares: vec![],
                                     },
-                                    middlewares: vec![
-                                        types::Middleware::Header {
-                                            operator: types::HeaderOperator::Set,
-                                            name: "X-Set-Or-Overwrite-Example-Header".to_string(),
-                                            value: Some("value".to_string()),
-                                            replace_with: None,
+                                    types::Route {
+                                        path: "/old-path-with-status".to_string(),
+                                        handler: types::Handler::Redirect {
+                                            status_code: Some(301),
+                                            path: Some("/new-path".to_string()),
                                         },
-                                        types::Middleware::Header {
-                                            operator: types::HeaderOperator::DeferSet,
-                                            name: "X-Set-With-defer".to_string(),
-                                            value: Some("value".to_string()),
-                                            replace_with: None,
+                                        middlewares: vec![],
+                                    },
+                                    types::Route {
+                                        path: "/example".to_string(),
+                                        handler: types::Handler::Respond {
+                                            status: Some(200),
+                                            body: Some("<h1>Example</h1>".to_string()),
                                         },
-                                        types::Middleware::Header {
-                                            operator: types::HeaderOperator::Delete,
-                                            name: "X-Delete-Example-Header".to_string(),
-                                            value: None,
-                                            replace_with: None,
-                                        },
-                                        types::Middleware::Header {
-                                            operator: types::HeaderOperator::Add,
-                                            name: "X-Add-Example-Header".to_string(),
-                                            value: Some("value".to_string()),
-                                            replace_with: None,
-                                        },
-                                        types::Middleware::Header {
-                                            operator: types::HeaderOperator::Default,
-                                            name: "X-Set-If-NotExist-Example-Header".to_string(),
-                                            value: Some("value".to_string()),
-                                            replace_with: None,
-                                        },
-                                        types::Middleware::Header {
-                                            operator: types::HeaderOperator::Replace,
-                                            name: "X-Replace-Header-Value".to_string(),
-                                            value: Some("value".to_string()),
-                                            replace_with: Some("replace_with_this".to_string()),
-                                        },
-                                        types::Middleware::Header {
-                                            operator: types::HeaderOperator::DeferReplace,
-                                            name: "X-Replace-Header-Value-With-Defer".to_string(),
-                                            value: Some("value".to_string()),
-                                            replace_with: Some("replace_with_this".to_string()),
-                                        },
-                                    ],
-                                },
-                            ],
-                        },
-                        types::VirtualHost {
-                            domain: "example.com".to_string(),
-                            routes: vec![
-                                types::Route {
-                                    path: "/blog/**".to_string(),
-                                    handler: types::Handler::Proxy(
-                                        "http://blog.example.com".to_string()
-                                    ),
-                                    middlewares: vec![
-                                        types::Middleware::Gzip,
-                                        types::Middleware::Cache("5m".to_string()),
-                                    ],
-                                },
-                                types::Route {
-                                    path: "/admin".to_string(),
-                                    handler: types::Handler::Proxy(
-                                        "http://admin.example.com".to_string()
-                                    ),
-                                    middlewares: vec![types::Middleware::Auth {
-                                        username: "superuser".to_string(),
-                                        password: "secret".to_string(),
-                                    },],
-                                },
-                            ],
-                        },
-                    ]
+                                        middlewares: vec![
+                                            types::Middleware::Header {
+                                                operator: types::HeaderOperator::Set,
+                                                name: "X-Set-Or-Overwrite-Example-Header"
+                                                    .to_string(),
+                                                value: Some("value".to_string()),
+                                                replace_with: None,
+                                            },
+                                            types::Middleware::Header {
+                                                operator: types::HeaderOperator::DeferSet,
+                                                name: "X-Set-With-defer".to_string(),
+                                                value: Some("value".to_string()),
+                                                replace_with: None,
+                                            },
+                                            types::Middleware::Header {
+                                                operator: types::HeaderOperator::Delete,
+                                                name: "X-Delete-Example-Header".to_string(),
+                                                value: None,
+                                                replace_with: None,
+                                            },
+                                            types::Middleware::Header {
+                                                operator: types::HeaderOperator::Add,
+                                                name: "X-Add-Example-Header".to_string(),
+                                                value: Some("value".to_string()),
+                                                replace_with: None,
+                                            },
+                                            types::Middleware::Header {
+                                                operator: types::HeaderOperator::Default,
+                                                name: "X-Set-If-NotExist-Example-Header"
+                                                    .to_string(),
+                                                value: Some("value".to_string()),
+                                                replace_with: None,
+                                            },
+                                            types::Middleware::Header {
+                                                operator: types::HeaderOperator::Replace,
+                                                name: "X-Replace-Header-Value".to_string(),
+                                                value: Some("value".to_string()),
+                                                replace_with: Some("replace_with_this".to_string()),
+                                            },
+                                            types::Middleware::Header {
+                                                operator: types::HeaderOperator::DeferReplace,
+                                                name: "X-Replace-Header-Value-With-Defer"
+                                                    .to_string(),
+                                                value: Some("value".to_string()),
+                                                replace_with: Some("replace_with_this".to_string()),
+                                            },
+                                        ],
+                                    },
+                                ],
+                            },
+                            types::VirtualHost {
+                                domain: "example.com".to_string(),
+                                routes: vec![
+                                    types::Route {
+                                        path: "/blog/**".to_string(),
+                                        handler: types::Handler::Proxy(
+                                            "http://blog.example.com".to_string()
+                                        ),
+                                        middlewares: vec![
+                                            types::Middleware::Gzip,
+                                            types::Middleware::Cache("5m".to_string()),
+                                        ],
+                                    },
+                                    types::Route {
+                                        path: "/admin".to_string(),
+                                        handler: types::Handler::Proxy(
+                                            "http://admin.example.com".to_string()
+                                        ),
+                                        middlewares: vec![types::Middleware::Auth {
+                                            username: "superuser".to_string(),
+                                            password: "secret".to_string(),
+                                        },],
+                                    },
+                                ],
+                            },
+                        ]
+                    }
                 ))
             );
         }
