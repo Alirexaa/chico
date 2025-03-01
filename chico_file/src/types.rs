@@ -32,6 +32,22 @@ pub enum Handler {
     },
 }
 
+impl Handler {
+    pub fn type_name(&self) -> &str {
+        match self {
+            Handler::File(_) => "File",
+            Handler::Proxy(_) => "Proxy",
+            Handler::Dir(_) => "Dir",
+            Handler::Browse(_) => "Browse",
+            Handler::Respond { status: _, body: _ } => "Respond",
+            Handler::Redirect {
+                path: _,
+                status_code: _,
+            } => "Redirect",
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Middleware {
     Gzip,
