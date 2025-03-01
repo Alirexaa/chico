@@ -1,10 +1,15 @@
 #[derive(Debug, PartialEq)]
+pub struct Config {
+    pub virtual_hosts: Vec<VirtualHost>,
+}
+
+#[derive(Debug, PartialEq)]
 pub struct VirtualHost {
     pub domain: String,
     pub routes: Vec<Route>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Route {
     pub path: String,
     pub handler: Handler,
@@ -43,7 +48,7 @@ impl Handler {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Middleware {
     Gzip,
     Cors,

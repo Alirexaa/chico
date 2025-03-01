@@ -1,5 +1,5 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
-use chico_file::types::{Handler, Route, VirtualHost};
+use chico_file::types::{Config, Handler, Route, VirtualHost};
 use handlers::select_handler;
 use http::{Request, Response};
 use http_body_util::Full;
@@ -14,6 +14,7 @@ use tokio::net::TcpListener;
 mod cli;
 mod config;
 mod handlers;
+mod virtual_host;
 #[tokio::main]
 async fn main() {
     let cli = cli::CLI::parse();
@@ -59,7 +60,7 @@ async fn main() {
 async fn handle_request(
     request: Request<hyper::body::Incoming>,
 ) -> Result<Response<Full<Bytes>>, Infallible> {
-    let vhs = vec![VirtualHost {
+    let virtual_hosts = vec![VirtualHost {
         domain: "localhost:3000".to_string(),
         routes: vec![Route {
             handler: Handler::Respond {
@@ -67,10 +68,11 @@ async fn handle_request(
                 body: Some("Hello".to_string()),
             },
             middlewares: vec![],
-            path: "/".to_string(),
+            path: "/*".to_string(),
         }],
     }];
-    let res = select_handler(&request, vhs).handle(request);
+    let config = Config { virtual_hosts };
+    let res = select_handler(&request, config).handle(request);
 
     Ok(res)
 }

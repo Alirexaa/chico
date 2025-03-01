@@ -1,4 +1,6 @@
-use chico_file::types::VirtualHost;
+use chico_file::types::Config;
+
+use crate::{config::ConfigExt, virtual_host::VirtualHostExt};
 use http_body_util::Full;
 use hyper::{body::Bytes, Response};
 use respond::RespondHandler;
@@ -21,21 +23,26 @@ impl RequestHandler for NullRequestHandler {
 #[allow(dead_code)]
 pub fn select_handler(
     request: &hyper::Request<hyper::body::Incoming>,
-    vhs: Vec<VirtualHost>,
+    config: Config,
 ) -> Box<dyn RequestHandler> {
     //todo handle unwrap
     let host = request.headers().get(http::header::HOST).unwrap();
     println!("host: {:?}", host);
-    let vh = vhs
-        .iter()
-        .find(|&vh| vh.domain == host.to_str().unwrap())
-        .unwrap();
+    let vh = &config.find_virtual_host(host.to_str().unwrap());
 
-    let route = vh
-        .routes
-        .iter()
-        .find(|&r| r.path == request.uri().path())
-        .unwrap();
+    if vh.is_none() {
+        todo!("abort connection in this case");
+    }
+
+    let vh = vh.unwrap();
+
+    let route = vh.find_route(request.uri().path());
+
+    if route.is_none() {
+        todo!("abort connection in this case");
+    }
+
+    let route = route.unwrap();
 
     let handler: Box<dyn RequestHandler> = match route.handler {
         chico_file::types::Handler::File(_) => todo!(),
