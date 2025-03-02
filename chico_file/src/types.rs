@@ -85,3 +85,35 @@ pub enum HeaderOperator {
     /// Prefix with ? to set a default value for the field. The field is only written if it doesn't yet exist.
     Default,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Handler;
+
+    #[test]
+    fn test_handler_type_name() {
+        let handler = Handler::File(String::new());
+        assert_eq!(handler.type_name(), "File");
+
+        let handler = Handler::Proxy(String::new());
+        assert_eq!(handler.type_name(), "Proxy");
+
+        let handler = Handler::Dir(String::new());
+        assert_eq!(handler.type_name(), "Dir");
+
+        let handler = Handler::Browse(String::new());
+        assert_eq!(handler.type_name(), "Browse");
+
+        let handler = Handler::Respond {
+            status: None,
+            body: None,
+        };
+        assert_eq!(handler.type_name(), "Respond");
+
+        let handler = Handler::Redirect {
+            path: None,
+            status_code: None,
+        };
+        assert_eq!(handler.type_name(), "Redirect");
+    }
+}
