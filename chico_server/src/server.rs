@@ -10,8 +10,13 @@ use tokio::net::TcpListener;
 pub async fn run_server(config: Config) {
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
 
-    let listener = TcpListener::bind(addr).await.unwrap();
-
+    let listener = match TcpListener::bind(addr).await {
+        Ok(listener) => listener,
+        Err(e) => {
+            eprintln!("Failed to bind to address {}: {:?}", addr, e);
+            return;
+        }
+    };
     loop {
         let (stream, _) = match listener.accept().await {
             Ok(conn) => conn,
