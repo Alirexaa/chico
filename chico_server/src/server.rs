@@ -7,6 +7,8 @@ use hyper::{body::Bytes, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 
+use crate::handlers::select_handler;
+
 pub async fn run_server(config: Config) {
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
 
@@ -51,8 +53,9 @@ pub async fn run_server(config: Config) {
 }
 
 async fn handle_request(
-    _request: Request<hyper::body::Incoming>,
-    _config: Config,
+    request: Request<hyper::body::Incoming>,
+    config: Config,
 ) -> Result<Response<Full<Bytes>>, Infallible> {
-    todo!()
+    let res = select_handler(&request, config).handle(request);
+    Ok(res)
 }
