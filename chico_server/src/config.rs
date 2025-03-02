@@ -16,7 +16,7 @@ impl ConfigExt for Config {
 }
 
 /// Validate the config file content
-pub(crate) async fn validate_config_file(path: &str) -> Result<(), String> {
+pub(crate) async fn validate_config_file(path: &str) -> Result<Config, String> {
     let content = tokio::fs::read_to_string(path).await;
     if content.is_err() {
         return Err(format!(
@@ -29,7 +29,7 @@ pub(crate) async fn validate_config_file(path: &str) -> Result<(), String> {
     parse_with_validate(&content)
 }
 
-fn parse_with_validate(content: &str) -> Result<(), String> {
+fn parse_with_validate(content: &str) -> Result<Config, String> {
     if content.is_empty() {
         return Err(format!(
             "Failed to parse content. reason: content is empty."
@@ -45,7 +45,8 @@ fn parse_with_validate(content: &str) -> Result<(), String> {
         ));
     }
 
-    let virtual_hosts = parse_result.unwrap().1.virtual_hosts;
+    let config = parse_result.unwrap().1;
+    let virtual_hosts = &config.virtual_hosts;
 
     if virtual_hosts.is_empty() {
         return Err(format!(
@@ -80,13 +81,15 @@ fn parse_with_validate(content: &str) -> Result<(), String> {
             paths.push(route.path.clone());
         }
     }
-    Ok(())
+
+    Ok(config)
 }
 
 #[cfg(test)]
 mod tests {
     use std::io::Write;
 
+    use chico_file::types::{Config, Handler, Route, VirtualHost};
     use rstest::rstest;
     use tempfile::NamedTempFile;
 
@@ -282,6 +285,28 @@ mod tests {
         let temp_file_path = temp_file_path.to_str().unwrap();
 
         let result = validate_config_file(temp_file_path).await;
-        assert_eq!(result, Ok(()));
+        assert_eq!(
+            result,
+            Ok(Config {
+                virtual_hosts: vec![
+                    VirtualHost {
+                        domain: "localhost".to_string(),
+                        routes: vec![Route {
+                            path: "/".to_string(),
+                            handler: Handler::File("index.html".to_string()),
+                            middlewares: vec![],
+                        }],
+                    },
+                    VirtualHost {
+                        domain: "example.com".to_string(),
+                        routes: vec![Route {
+                            path: "/".to_string(),
+                            handler: Handler::File("index.html".to_string()),
+                            middlewares: vec![],
+                        }],
+                    }
+                ]
+            })
+        );
     }
 }
