@@ -13,8 +13,13 @@ pub async fn run_server(config: Config) {
     let listener = TcpListener::bind(addr).await.unwrap();
 
     loop {
-        let (stream, _) = listener.accept().await.unwrap();
-
+        let (stream, _) = match listener.accept().await {
+            Ok(conn) => conn,
+            Err(e) => {
+                eprintln!("Error accepting connection: {:?}", e);
+                continue;
+            }
+        };
         // Use an adapter to access something implementing `tokio::io` traits as if they implement
         // `hyper::rt` IO traits.
         let io = TokioIo::new(stream);
