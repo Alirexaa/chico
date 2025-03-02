@@ -1,10 +1,9 @@
-use std::{convert::Infallible, net::SocketAddr};
-
 use chico_file::types::Config;
 use http::{Request, Response};
 use http_body_util::Full;
 use hyper::{body::Bytes, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
+use std::{convert::Infallible, net::SocketAddr};
 use tokio::net::TcpListener;
 
 use crate::handlers::select_handler;
