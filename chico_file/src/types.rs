@@ -32,6 +32,22 @@ pub enum Handler {
     },
 }
 
+impl Handler {
+    pub fn type_name(&self) -> &str {
+        match self {
+            Handler::File(_) => "File",
+            Handler::Proxy(_) => "Proxy",
+            Handler::Dir(_) => "Dir",
+            Handler::Browse(_) => "Browse",
+            Handler::Respond { status: _, body: _ } => "Respond",
+            Handler::Redirect {
+                path: _,
+                status_code: _,
+            } => "Redirect",
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Middleware {
     Gzip,
@@ -68,4 +84,36 @@ pub enum HeaderOperator {
     DeferReplace,
     /// Prefix with ? to set a default value for the field. The field is only written if it doesn't yet exist.
     Default,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Handler;
+
+    #[test]
+    fn test_handler_type_name() {
+        let handler = Handler::File(String::new());
+        assert_eq!(handler.type_name(), "File");
+
+        let handler = Handler::Proxy(String::new());
+        assert_eq!(handler.type_name(), "Proxy");
+
+        let handler = Handler::Dir(String::new());
+        assert_eq!(handler.type_name(), "Dir");
+
+        let handler = Handler::Browse(String::new());
+        assert_eq!(handler.type_name(), "Browse");
+
+        let handler = Handler::Respond {
+            status: None,
+            body: None,
+        };
+        assert_eq!(handler.type_name(), "Respond");
+
+        let handler = Handler::Redirect {
+            path: None,
+            status_code: None,
+        };
+        assert_eq!(handler.type_name(), "Redirect");
+    }
 }
