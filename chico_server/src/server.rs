@@ -22,6 +22,8 @@ pub async fn run_server(config: Config) {
             return;
         }
     };
+    println!("Start listening requests on 3000");
+
     loop {
         let (stream, _) = match listener.accept().await {
             Ok(conn) => conn,
