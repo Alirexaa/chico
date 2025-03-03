@@ -1,0 +1,6 @@
+localhost:3000 {
+    route /secret/* {
+        ## This mean http status is (403/forbidden) and response body will be `Access denied`
+        respond "Access denied" 403
+    }
+}
