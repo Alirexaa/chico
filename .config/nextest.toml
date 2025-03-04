@@ -1,3 +1,7 @@
+[test-groups]
+# Tests with the serial integration test group will run serially, not concurrency.
+serial-integration = { max-threads = 1 }
+
 [profile.ci]
 # Retry tests before failing them.
 retries = { backoff = "exponential", count = 2, delay = "2s" }
@@ -7,6 +11,12 @@ fail-fast = false
 # of the run (for easy scrollability).
 failure-output = "immediate-final"
 
+[[profile.ci.overrides]]
+filter = 'rdeps(test_respond_handler)'
+test-group = 'serial-integration'
+
 # save junit report
 [profile.ci.junit]
 path = "junit.xml"
+
+
