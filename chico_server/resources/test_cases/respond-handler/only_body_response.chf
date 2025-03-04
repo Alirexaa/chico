@@ -1,0 +1,7 @@
+localhost:3000 {
+    route / {
+        # If status code has not be provided the status code will be (200/OK).
+        # This mean http status is (200/OK) and response body will be <h1>Example</h1>
+        respond "<h1>Example</h1>"
+    }
+}

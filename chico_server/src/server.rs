@@ -1,11 +1,16 @@
-use std::{convert::Infallible, net::SocketAddr};
-
 use chico_file::types::Config;
 use http::{Request, Response};
 use http_body_util::Full;
-use hyper::{body::Bytes, server::conn::http1, service::service_fn};
+use hyper::{
+    body::{Body, Bytes},
+    server::conn::http1,
+    service::service_fn,
+};
 use hyper_util::rt::TokioIo;
+use std::{convert::Infallible, net::SocketAddr};
 use tokio::net::TcpListener;
+
+use crate::handlers::{select_handler, RequestHandler};
 
 pub async fn run_server(config: Config) {
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -17,6 +22,8 @@ pub async fn run_server(config: Config) {
             return;
         }
     };
+    println!("Start listening requests on 3000");
+
     loop {
         let (stream, _) = match listener.accept().await {
             Ok(conn) => conn,
@@ -51,8 +58,9 @@ pub async fn run_server(config: Config) {
 }
 
 async fn handle_request(
-    _request: Request<hyper::body::Incoming>,
-    _config: Config,
+    request: Request<impl Body>,
+    config: Config,
 ) -> Result<Response<Full<Bytes>>, Infallible> {
-    todo!()
+    let res = select_handler(&request, config).handle(request);
+    Ok(res)
 }

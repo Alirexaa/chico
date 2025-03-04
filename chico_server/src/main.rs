@@ -1,9 +1,8 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
-use std::process::exit;
-
 use clap::Parser;
 use config::validate_config_file;
 use server::run_server;
+use std::process::exit;
 mod cli;
 mod config;
 mod handlers;
