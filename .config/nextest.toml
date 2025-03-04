@@ -12,11 +12,9 @@ fail-fast = false
 failure-output = "immediate-final"
 
 [[profile.ci.overrides]]
-filter = 'rdeps(test_respond_handler)'
+filter = 'test(test_respond_handler)'
 test-group = 'serial-integration'
 
 # save junit report
 [profile.ci.junit]
 path = "junit.xml"
-
-
