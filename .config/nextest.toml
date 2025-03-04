@@ -11,8 +11,9 @@ fail-fast = false
 # of the run (for easy scrollability).
 failure-output = "immediate-final"
 
+# Running tests serially, not concurrency.
 [[profile.ci.overrides]]
-filter = 'test(test_respond_handler)'
+filter = 'test(serial_integration)'
 test-group = 'serial-integration'
 
 # save junit report

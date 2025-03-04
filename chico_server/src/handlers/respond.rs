@@ -21,7 +21,7 @@ impl RequestHandler for RespondHandler {
                 .unwrap()
         } else {
             unimplemented!(
-                "Only respond handler is supported. Given handler was {:}",
+                "Only respond handler is supported. Given handler was {}",
                 self.handler.type_name()
             )
         }
@@ -64,7 +64,6 @@ mod tests {
         )
         .unwrap();
 
-        response.status();
         assert_eq!(response_body, "");
         assert_eq!(response.status(), StatusCode::OK);
     }

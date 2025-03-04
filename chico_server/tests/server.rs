@@ -1,8 +1,5 @@
-use http::StatusCode;
-use serial_test::serial;
 use std::{
     io::{BufRead, BufReader},
-    path::Path,
     process::Stdio,
     time::Duration,
 };
@@ -69,65 +66,75 @@ impl ServerFixture {
     }
 }
 
-#[tokio::test]
-#[serial]
-async fn test_respond_handler_ok_with_body_response() {
-    let config_file_path =
-        Path::new("resources/test_cases/respond-handler/ok_with_body_response.chf");
-    assert!(config_file_path.exists());
+/// We use #[serial_test::serial] to run tests (with cargo test) in this module serially. Running these tests concurrency case failure.
+/// We use serial_integration name to run tests (with nextest) in this module serially. We configured nextest to run these these serially. See .config/nextest.toml.
+#[serial_test::serial]
+mod serial_integration {
+    use std::path::Path;
 
-    let mut app = ServerFixture::run_app(config_file_path);
-    app.wait_for_start();
-    let response = reqwest::get("http://localhost:3000/").await.unwrap();
-    app.stop_app();
+    use http::StatusCode;
 
-    assert_eq!(&response.status(), &StatusCode::OK);
-    assert_eq!(&response.text().await.unwrap(), "<h1>Example</h1>");
-}
+    use crate::ServerFixture;
 
-#[tokio::test]
-#[serial]
-async fn test_respond_handler_403_status_code() {
-    let config_file_path = Path::new("resources/test_cases/respond-handler/403_status_code.chf");
-    assert!(config_file_path.exists());
+    #[tokio::test]
+    async fn test_respond_handler_ok_with_body_response() {
+        let config_file_path =
+            Path::new("resources/test_cases/respond-handler/ok_with_body_response.chf");
+        assert!(config_file_path.exists());
 
-    let mut app = ServerFixture::run_app(config_file_path);
-    app.wait_for_start();
-    let response = reqwest::get("http://localhost:3000/secret/data")
-        .await
-        .unwrap();
-    app.stop_app();
+        let mut app = ServerFixture::run_app(config_file_path);
+        app.wait_for_start();
+        let response = reqwest::get("http://localhost:3000/").await.unwrap();
+        app.stop_app();
 
-    assert_eq!(&response.status(), &StatusCode::FORBIDDEN);
-    assert_eq!(&response.text().await.unwrap(), "Access denied");
-}
+        assert_eq!(&response.status(), &StatusCode::OK);
+        assert_eq!(&response.text().await.unwrap(), "<h1>Example</h1>");
+    }
 
-#[tokio::test]
-#[serial]
-async fn test_respond_handler_only_body_response() {
-    let config_file_path = Path::new("resources/test_cases/respond-handler/only_body_response.chf");
-    assert!(config_file_path.exists());
+    #[tokio::test]
+    async fn test_respond_handler_403_status_code() {
+        let config_file_path =
+            Path::new("resources/test_cases/respond-handler/403_status_code.chf");
+        assert!(config_file_path.exists());
 
-    let mut app = ServerFixture::run_app(config_file_path);
-    app.wait_for_start();
-    let response = reqwest::get("http://localhost:3000/").await.unwrap();
-    app.stop_app();
+        let mut app = ServerFixture::run_app(config_file_path);
+        app.wait_for_start();
+        let response = reqwest::get("http://localhost:3000/secret/data")
+            .await
+            .unwrap();
+        app.stop_app();
 
-    assert_eq!(&response.status(), &StatusCode::OK);
-    assert_eq!(&response.text().await.unwrap(), "<h1>Example</h1>");
-}
+        assert_eq!(&response.status(), &StatusCode::FORBIDDEN);
+        assert_eq!(&response.text().await.unwrap(), "Access denied");
+    }
 
-#[tokio::test]
-#[serial]
-async fn test_respond_handler_simple_ok_response() {
-    let config_file_path = Path::new("resources/test_cases/respond-handler/simple_ok_response.chf");
-    assert!(config_file_path.exists());
+    #[tokio::test]
+    async fn test_respond_handler_only_body_response() {
+        let config_file_path =
+            Path::new("resources/test_cases/respond-handler/only_body_response.chf");
+        assert!(config_file_path.exists());
 
-    let mut app = ServerFixture::run_app(config_file_path);
-    app.wait_for_start();
-    let response = reqwest::get("http://localhost:3000/health").await.unwrap();
-    app.stop_app();
+        let mut app = ServerFixture::run_app(config_file_path);
+        app.wait_for_start();
+        let response = reqwest::get("http://localhost:3000/").await.unwrap();
+        app.stop_app();
 
-    assert_eq!(&response.status(), &StatusCode::OK);
-    assert_eq!(&response.text().await.unwrap(), "");
+        assert_eq!(&response.status(), &StatusCode::OK);
+        assert_eq!(&response.text().await.unwrap(), "<h1>Example</h1>");
+    }
+
+    #[tokio::test]
+    async fn test_respond_handler_simple_ok_response() {
+        let config_file_path =
+            Path::new("resources/test_cases/respond-handler/simple_ok_response.chf");
+        assert!(config_file_path.exists());
+
+        let mut app = ServerFixture::run_app(config_file_path);
+        app.wait_for_start();
+        let response = reqwest::get("http://localhost:3000/health").await.unwrap();
+        app.stop_app();
+
+        assert_eq!(&response.status(), &StatusCode::OK);
+        assert_eq!(&response.text().await.unwrap(), "");
+    }
 }
