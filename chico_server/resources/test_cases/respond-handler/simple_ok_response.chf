@@ -1,6 +1,6 @@
 localhost:3000 {
     route /health {
-        ## This mean http status is (200/OK) with empty response body
+        # This mean http status is (200/OK) with empty response body
         respond 200
     }
 }

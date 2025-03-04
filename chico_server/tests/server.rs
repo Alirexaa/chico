@@ -25,8 +25,8 @@ impl ServerFixture {
     }
 
     pub fn stop_app(&mut self) {
-        let _ = &self.process.kill().unwrap();
-        _ = &self.process.wait();
+        self.process.kill().unwrap();
+        self.process.wait().unwrap();
         self.wait_for_port_release();
     }
 

@@ -96,7 +96,6 @@ mod tests {
         )
         .unwrap();
 
-        response.status();
         assert_eq!(response_body, "Hello, world!");
         assert_eq!(response.status(), StatusCode::OK);
     }
@@ -129,7 +128,6 @@ mod tests {
         )
         .unwrap();
 
-        response.status();
         assert_eq!(response_body, "Access denied");
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
