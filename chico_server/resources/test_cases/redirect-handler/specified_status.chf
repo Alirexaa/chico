@@ -1,0 +1,10 @@
+localhost:3000 {
+
+    route /old-path {
+        redirect /new-path 301
+    }
+
+    route /new-path {
+        respond "<h1>Redirected from old-path</h1>" 200
+    }   
+}

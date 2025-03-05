@@ -1,4 +1,5 @@
 use chico_file::types::Config;
+use redirect::RedirectHandler;
 
 use crate::{config::ConfigExt, virtual_host::VirtualHostExt};
 use http_body_util::Full;
@@ -8,8 +9,8 @@ use hyper::{
 };
 use respond::RespondHandler;
 
+mod redirect;
 mod respond;
-
 pub trait RequestHandler {
     fn handle(&self, _request: hyper::Request<impl Body>) -> Response<Full<Bytes>>;
 }
@@ -55,7 +56,9 @@ pub fn select_handler(request: &hyper::Request<impl Body>, config: Config) -> Ha
         chico_file::types::Handler::Redirect {
             path: _,
             status_code: _,
-        } => todo!(),
+        } => HandlerEnum::Redirect(RedirectHandler {
+            handler: route.handler.clone(),
+        }),
     };
 
     handler
@@ -65,6 +68,7 @@ pub enum HandlerEnum {
     #[allow(dead_code)]
     Null(NullRequestHandler),
     Respond(RespondHandler),
+    Redirect(RedirectHandler),
 }
 
 impl RequestHandler for HandlerEnum {
@@ -72,6 +76,7 @@ impl RequestHandler for HandlerEnum {
         match self {
             HandlerEnum::Null(handler) => handler.handle(request),
             HandlerEnum::Respond(handler) => handler.handle(request),
+            HandlerEnum::Redirect(handler) => handler.handle(request),
         }
     }
 }
