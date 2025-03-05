@@ -15,7 +15,7 @@ impl RequestHandler for RedirectHandler {
     ) -> http::Response<http_body_util::Full<hyper::body::Bytes>> {
         if let types::Handler::Redirect { path, status_code } = &self.handler {
             // Based on chico file path is always some
-            let path = path.clone().expect("Path value expect.");
+            let path = path.clone().expect("Expected path value not provided.");
             let status_code = status_code.unwrap_or(StatusCode::FOUND.as_u16());
 
             Response::builder()
@@ -60,7 +60,7 @@ mod tests {
             response
                 .headers()
                 .get(http::header::LOCATION)
-                .expect("Location header expected")
+                .expect("Expected Location header not provided.")
                 .to_str()
                 .unwrap(),
             "/new-path".to_string()
@@ -86,7 +86,7 @@ mod tests {
             response
                 .headers()
                 .get(http::header::LOCATION)
-                .expect("Location header expected")
+                .expect("Expected Location header not provided.")
                 .to_str()
                 .unwrap(),
             "/new-path".to_string()
