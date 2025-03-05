@@ -31,10 +31,9 @@ impl RequestHandler for RespondHandler {
 #[cfg(test)]
 mod tests {
 
-    use crate::handlers::RequestHandler;
+    use crate::{handlers::RequestHandler, test_utils::MockBody};
     use http::{Request, StatusCode};
     use http_body_util::BodyExt;
-    use hyper::body::{Body, Bytes};
 
     #[tokio::test]
     async fn test_respond_handler_specified_status_no_body() {
@@ -130,33 +129,5 @@ mod tests {
 
         assert_eq!(response_body, "Access denied");
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    }
-
-    struct MockBody {
-        data: &'static [u8],
-    }
-
-    impl MockBody {
-        fn new(data: &'static [u8]) -> Self {
-            Self { data }
-        }
-    }
-
-    impl Body for MockBody {
-        type Data = Bytes;
-        type Error = hyper::Error;
-
-        fn poll_frame(
-            mut self: std::pin::Pin<&mut Self>,
-            _cx: &mut std::task::Context<'_>,
-        ) -> std::task::Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
-            if self.data.is_empty() {
-                std::task::Poll::Ready(None)
-            } else {
-                let data = self.data;
-                self.data = &[];
-                std::task::Poll::Ready(Some(Ok(hyper::body::Frame::data(Bytes::from(data)))))
-            }
-        }
     }
 }

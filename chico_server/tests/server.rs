@@ -137,4 +137,44 @@ mod serial_integration {
         assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(&response.text().await.unwrap(), "");
     }
+
+    #[tokio::test]
+    async fn test_redirect_handler_specified_status() {
+        let config_file_path =
+            Path::new("resources/test_cases/redirect-handler/specified_status.chf");
+        assert!(config_file_path.exists());
+
+        let mut app = ServerFixture::run_app(config_file_path);
+        app.wait_for_start();
+        let response = reqwest::get("http://localhost:3000/old-path")
+            .await
+            .unwrap();
+        app.stop_app();
+
+        assert_eq!(&response.status(), &StatusCode::OK);
+        assert_eq!(
+            &response.text().await.unwrap(),
+            "<h1>Redirected from old-path</h1>"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_redirect_handler_not_specified_status() {
+        let config_file_path =
+            Path::new("resources/test_cases/redirect-handler/not_specified_status.chf");
+        assert!(config_file_path.exists());
+
+        let mut app = ServerFixture::run_app(config_file_path);
+        app.wait_for_start();
+        let response = reqwest::get("http://localhost:3000/old-path")
+            .await
+            .unwrap();
+        app.stop_app();
+
+        assert_eq!(&response.status(), &StatusCode::OK);
+        assert_eq!(
+            &response.text().await.unwrap(),
+            "<h1>Redirected from old-path</h1>"
+        );
+    }
 }

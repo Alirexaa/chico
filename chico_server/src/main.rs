@@ -7,7 +7,10 @@ mod cli;
 mod config;
 mod handlers;
 mod server;
+#[cfg(test)]
+mod test_utils;
 mod virtual_host;
+
 #[tokio::main]
 async fn main() {
     let cli = cli::CLI::parse();
