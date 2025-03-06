@@ -194,6 +194,7 @@ dependencies = [
  "serial_test",
  "tempfile",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
