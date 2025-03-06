@@ -30,7 +30,7 @@ pub fn select_handler(request: &hyper::Request<impl Body>, config: Config) -> Ha
     let vh = &config.find_virtual_host(host.to_str().unwrap());
 
     if vh.is_none() {
-        todo!("abort connection in this case");
+        return HandlerEnum::not_found_respond_handler();
     }
 
     let vh = vh.unwrap();
@@ -38,7 +38,7 @@ pub fn select_handler(request: &hyper::Request<impl Body>, config: Config) -> Ha
     let route = vh.find_route(request.uri().path());
 
     if route.is_none() {
-        todo!("abort connection in this case");
+        return HandlerEnum::not_found_respond_handler();
     }
 
     let route = route.unwrap();
@@ -78,5 +78,27 @@ impl RequestHandler for HandlerEnum {
             HandlerEnum::Respond(handler) => handler.handle(request),
             HandlerEnum::Redirect(handler) => handler.handle(request),
         }
+    }
+}
+
+impl HandlerEnum {
+    pub fn not_found_respond_handler() -> HandlerEnum {
+        let body = r"<!DOCTYPE html>  
+<html>  
+<head>  
+    <title>404 Not Found</title>  
+</head>  
+<body>  
+    <h1>404 Not Found</h1>  
+</body>  
+</html>  
+";
+
+        HandlerEnum::Respond(RespondHandler {
+            handler: chico_file::types::Handler::Respond {
+                status: Some(404),
+                body: Some(body.to_string()),
+            },
+        })
     }
 }
