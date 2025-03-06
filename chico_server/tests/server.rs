@@ -177,4 +177,52 @@ mod serial_integration {
             "<h1>Redirected from old-path</h1>"
         );
     }
+
+    #[tokio::test]
+    async fn test_respond_handler_return_404_for_unknown_route() {
+        let config_file_path =
+            Path::new("resources/test_cases/respond-handler/simple_ok_response.chf");
+        assert!(config_file_path.exists());
+
+        let mut app = ServerFixture::run_app(config_file_path);
+        app.wait_for_start();
+        let response = reqwest::get("http://localhost:3000/blog").await.unwrap();
+        app.stop_app();
+
+        let body = r"<!DOCTYPE html>  
+<html>  
+<head>  
+    <title>404 Not Found</title>  
+</head>  
+<body>  
+    <h1>404 Not Found</h1>  
+</body>  
+</html>";
+
+        assert_eq!(&response.status(), &StatusCode::NOT_FOUND);
+        assert_eq!(&response.text().await.unwrap(), body);
+    }
+
+    #[tokio::test]
+    async fn test_respond_handler_return_404_for_unknown_host() {
+        let config_file_path =
+            Path::new("resources/test_cases/respond-handler/simple_ok_response.chf");
+        assert!(config_file_path.exists());
+
+        let mut app = ServerFixture::run_app(config_file_path);
+        app.wait_for_start();
+        let response = reqwest::get("http://127.0.0.1:3000").await.unwrap();
+        app.stop_app();
+        let body = r"<!DOCTYPE html>  
+<html>  
+<head>  
+    <title>404 Not Found</title>  
+</head>  
+<body>  
+    <h1>404 Not Found</h1>  
+</body>  
+</html>";
+        assert_eq!(&response.status(), &StatusCode::NOT_FOUND);
+        assert_eq!(&response.text().await.unwrap(), body);
+    }
 }
