@@ -5,6 +5,7 @@ use hyper::body::{Body, Bytes};
 
 use super::RequestHandler;
 
+#[derive(PartialEq, Debug)]
 pub struct RespondHandler {
     pub handler: types::Handler,
 }

@@ -4,6 +4,7 @@ use http_body_util::Full;
 
 use super::RequestHandler;
 
+#[derive(PartialEq, Debug)]
 pub struct RedirectHandler {
     pub handler: types::Handler,
 }
