@@ -37,40 +37,20 @@ impl RequestHandler for FileHandler {
             let file = File::open(path);
 
             if file.is_err() {
-                let handler = match file.err().unwrap().kind() {
-                    ErrorKind::NotFound => RespondHandler {
-                        handler: types::Handler::Respond {
-                            status: Some(404),
-                            body: None,
-                        },
-                    },
-                    ErrorKind::PermissionDenied => RespondHandler {
-                        handler: types::Handler::Respond {
-                            status: Some(403),
-                            body: None,
-                        },
-                    },
-                    ErrorKind::IsADirectory => RespondHandler {
-                        handler: types::Handler::Respond {
-                            status: Some(403),
-                            body: None,
-                        },
-                    },
-                    _ => RespondHandler {
-                        handler: types::Handler::Respond {
-                            status: Some(500),
-                            body: None,
-                        },
-                    },
-                };
-                return handler.handle(_request);
+                let err_kind = file.as_ref().err().unwrap().kind();
+                return handel_file_error(_request, err_kind);
             }
 
             let mut file: File = file.unwrap();
 
             let mut buf = vec![];
 
-            file.read_to_end(&mut buf).unwrap();
+            let read_result = file.read_to_end(&mut buf);
+            if read_result.is_err() {
+                let err_kind = read_result.as_ref().err().unwrap().kind();
+
+                return handel_file_error(_request, err_kind);
+            }
 
             Response::builder()
                 .status(StatusCode::OK)
@@ -83,6 +63,39 @@ impl RequestHandler for FileHandler {
             )
         }
     }
+}
+
+fn handel_file_error(
+    _request: http::Request<impl hyper::body::Body>,
+    error: ErrorKind,
+) -> Response<Full<Bytes>> {
+    let handler = match error {
+        ErrorKind::NotFound => RespondHandler {
+            handler: types::Handler::Respond {
+                status: Some(404),
+                body: None,
+            },
+        },
+        ErrorKind::PermissionDenied => RespondHandler {
+            handler: types::Handler::Respond {
+                status: Some(403),
+                body: None,
+            },
+        },
+        ErrorKind::IsADirectory => RespondHandler {
+            handler: types::Handler::Respond {
+                status: Some(403),
+                body: None,
+            },
+        },
+        _ => RespondHandler {
+            handler: types::Handler::Respond {
+                status: Some(500),
+                body: None,
+            },
+        },
+    };
+    return handler.handle(_request);
 }
 
 #[cfg(test)]
