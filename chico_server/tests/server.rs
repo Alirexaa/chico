@@ -35,23 +35,33 @@ impl ServerFixture {
     }
 
     pub fn stop_app(&mut self) {
-        self.process.kill().unwrap();
-        self.process.wait().unwrap();
-        self.wait_for_port_release();
+        // Attempt to kill the process gracefully
+        if let Err(e) = self.process.kill() {
+            eprintln!("Failed to kill server process: {}", e);
+        }
+
+        // Wait for the process to exit, regardless of whether kill succeeded
+        if let Err(e) = self.process.wait() {
+            eprintln!("Failed to wait for server process: {}", e);
+        }
+
+        if let Err(e) = self.wait_for_port_release() {
+            eprintln!("Error waiting for port release: {}", e);
+        }
     }
 
-    fn wait_for_port_release(&self) {
+    fn wait_for_port_release(&self) -> Result<(), String> {
         let max_retries = 10;
         let delay = Duration::from_millis(300);
 
         for _ in 0..max_retries {
             if std::net::TcpListener::bind("127.0.0.1:3000").is_ok() {
-                return; // Port is free, server is fully stopped
+                return Ok(()); // Port is free, server is fully stopped
             }
             std::thread::sleep(delay);
         }
 
-        panic!("Server did not release port 3000 within expected time");
+        Err("Server did not release port 3000 within expected time".to_string())
     }
 
     pub fn wait_for_text(&mut self, text: &str) {
@@ -82,6 +92,14 @@ impl ServerFixture {
     #[allow(dead_code)]
     pub fn get_current_exe(&self) -> &String {
         &self.exe_path
+    }
+}
+
+impl Drop for ServerFixture {
+    fn drop(&mut self) {
+        println!("Dropping ServerFixture, stopping app...");
+        self.stop_app();
+        println!("ServerFixture dropped.");
     }
 }
 
