@@ -37,7 +37,7 @@ impl RequestHandler for FileHandler {
 
             if file.is_err() {
                 let err_kind = file.as_ref().err().unwrap().kind();
-                return handel_file_error(_request, err_kind);
+                return handle_file_error(_request, err_kind);
             }
 
             let mut file: File = file.unwrap();
@@ -48,7 +48,7 @@ impl RequestHandler for FileHandler {
             if read_result.is_err() {
                 let err_kind = read_result.as_ref().err().unwrap().kind();
 
-                return handel_file_error(_request, err_kind);
+                return handle_file_error(_request, err_kind);
             }
 
             Response::builder()
@@ -64,7 +64,7 @@ impl RequestHandler for FileHandler {
     }
 }
 
-fn handel_file_error(
+fn handle_file_error(
     _request: http::Request<impl hyper::body::Body>,
     error: ErrorKind,
 ) -> Response<Full<Bytes>> {
