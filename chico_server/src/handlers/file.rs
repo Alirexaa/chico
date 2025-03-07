@@ -50,6 +50,12 @@ impl RequestHandler for FileHandler {
                             body: None,
                         },
                     },
+                    ErrorKind::IsADirectory => RespondHandler {
+                        handler: types::Handler::Respond {
+                            status: Some(403),
+                            body: None,
+                        },
+                    },
                     _ => RespondHandler {
                         handler: types::Handler::Respond {
                             status: Some(500),
