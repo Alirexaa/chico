@@ -84,9 +84,10 @@ mod serial_integration {
 
         let mut app = ServerFixture::run_app(config_file_path);
         app.wait_for_start();
-        let response = reqwest::get("http://localhost:3000/").await.unwrap();
+        let response = reqwest::get("http://localhost:3000/").await;
         app.stop_app();
 
+        let response = response.unwrap();
         assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(&response.text().await.unwrap(), "<h1>Example</h1>");
     }
@@ -99,11 +100,11 @@ mod serial_integration {
 
         let mut app = ServerFixture::run_app(config_file_path);
         app.wait_for_start();
-        let response = reqwest::get("http://localhost:3000/secret/data")
-            .await
-            .unwrap();
+        let response = reqwest::get("http://localhost:3000/secret/data").await;
+
         app.stop_app();
 
+        let response = response.unwrap();
         assert_eq!(&response.status(), &StatusCode::FORBIDDEN);
         assert_eq!(&response.text().await.unwrap(), "Access denied");
     }
@@ -116,9 +117,10 @@ mod serial_integration {
 
         let mut app = ServerFixture::run_app(config_file_path);
         app.wait_for_start();
-        let response = reqwest::get("http://localhost:3000/").await.unwrap();
+        let response = reqwest::get("http://localhost:3000/").await;
         app.stop_app();
 
+        let response = response.unwrap();
         assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(&response.text().await.unwrap(), "<h1>Example</h1>");
     }
@@ -131,9 +133,10 @@ mod serial_integration {
 
         let mut app = ServerFixture::run_app(config_file_path);
         app.wait_for_start();
-        let response = reqwest::get("http://localhost:3000/health").await.unwrap();
+        let response = reqwest::get("http://localhost:3000/health").await;
         app.stop_app();
 
+        let response = response.unwrap();
         assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(&response.text().await.unwrap(), "");
     }
@@ -146,11 +149,10 @@ mod serial_integration {
 
         let mut app = ServerFixture::run_app(config_file_path);
         app.wait_for_start();
-        let response = reqwest::get("http://localhost:3000/old-path")
-            .await
-            .unwrap();
+        let response = reqwest::get("http://localhost:3000/old-path").await;
         app.stop_app();
 
+        let response = response.unwrap();
         assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(
             &response.text().await.unwrap(),
@@ -166,11 +168,10 @@ mod serial_integration {
 
         let mut app = ServerFixture::run_app(config_file_path);
         app.wait_for_start();
-        let response = reqwest::get("http://localhost:3000/old-path")
-            .await
-            .unwrap();
+        let response = reqwest::get("http://localhost:3000/old-path").await;
         app.stop_app();
 
+        let response = response.unwrap();
         assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(
             &response.text().await.unwrap(),
@@ -186,7 +187,7 @@ mod serial_integration {
 
         let mut app = ServerFixture::run_app(config_file_path);
         app.wait_for_start();
-        let response = reqwest::get("http://localhost:3000/blog").await.unwrap();
+        let response = reqwest::get("http://localhost:3000/blog").await;
         app.stop_app();
 
         let body = r"<!DOCTYPE html>  
@@ -199,6 +200,7 @@ mod serial_integration {
 </body>  
 </html>";
 
+        let response = response.unwrap();
         assert_eq!(&response.status(), &StatusCode::NOT_FOUND);
         assert_eq!(&response.text().await.unwrap(), body);
     }
@@ -211,7 +213,7 @@ mod serial_integration {
 
         let mut app = ServerFixture::run_app(config_file_path);
         app.wait_for_start();
-        let response = reqwest::get("http://127.0.0.1:3000").await.unwrap();
+        let response = reqwest::get("http://127.0.0.1:3000").await;
         app.stop_app();
         let body = r"<!DOCTYPE html>  
 <html>  
@@ -222,6 +224,8 @@ mod serial_integration {
     <h1>404 Not Found</h1>  
 </body>  
 </html>";
+
+        let response = response.unwrap();
         assert_eq!(&response.status(), &StatusCode::NOT_FOUND);
         assert_eq!(&response.text().await.unwrap(), body);
     }
