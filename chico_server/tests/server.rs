@@ -279,7 +279,11 @@ mod serial_integration {
         // app.wait_for_start();
 
         let response = reqwest::get("http://localhost:3000").await;
+
+        // Cleanup resources before assertion
         app.stop_app();
+        _ = std::fs::remove_file(file_path);
+
         let response = response.unwrap();
         assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(&response.text().await.unwrap(), content);
