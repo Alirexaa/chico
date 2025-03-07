@@ -70,7 +70,7 @@ impl ServerFixture {
 /// We use serial_integration name to run tests (with nextest) in this module serially. We configured nextest to run these these serially. See .config/nextest.toml.
 #[serial_test::serial]
 mod serial_integration {
-    use std::path::Path;
+    use std::{fs::File, io::Write, path::Path};
 
     use http::StatusCode;
 
@@ -224,5 +224,53 @@ mod serial_integration {
 </html>";
         assert_eq!(&response.status(), &StatusCode::NOT_FOUND);
         assert_eq!(&response.text().await.unwrap(), body);
+    }
+
+    #[tokio::test]
+    async fn test_respond_handler_return_ok() {
+        let config_file_path =
+            Path::new("resources/test_cases/file-handler/file_exist_return_ok.chf");
+        assert!(config_file_path.exists());
+
+        let exe_path = std::env::current_exe().unwrap();
+        let cd = exe_path.parent().unwrap();
+        let file_path = cd.join("index.html");
+
+        let content = r"<!DOCTYPE html>  
+        <html>  
+        <head>  
+            <title>Hello World</title>  
+        </head>  
+        <body>  
+            <h1>Hello World</h1>  
+        </body>  
+        </html>";
+
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+
+        let mut app = ServerFixture::run_app(config_file_path);
+        app.wait_for_start();
+        let response = reqwest::get("http://localhost:3000").await;
+        app.stop_app();
+        let response = response.unwrap();
+        assert_eq!(&response.status(), &StatusCode::OK);
+        assert_eq!(&response.text().await.unwrap(), content);
+    }
+
+    #[tokio::test]
+    async fn test_file_handler_return_404() {
+        let config_file_path =
+            Path::new("resources/test_cases/file-handler/file_not_exist_return_404.chf");
+        assert!(config_file_path.exists());
+
+        let mut app = ServerFixture::run_app(config_file_path);
+        app.wait_for_start();
+        let response = reqwest::get("http://localhost:3000/not-exist").await;
+        app.stop_app();
+
+        let response = response.unwrap();
+        assert_eq!(&response.status(), &StatusCode::NOT_FOUND);
+        assert_eq!(&response.text().await.unwrap(), "");
     }
 }

@@ -30,6 +30,7 @@ impl RequestHandler for FileHandler {
             if !path.is_absolute() {
                 let exe_path = env::current_exe().unwrap();
                 let cd = exe_path.parent().unwrap();
+                println!("CD : {:?}", cd);
                 path = cd.join(path);
             };
 
