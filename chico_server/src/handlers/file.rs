@@ -140,6 +140,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_file_handler_return_ok_absolute_path() {
+        let exe_path = std::env::current_exe().unwrap();
+        let cd = exe_path.parent().unwrap();
+        let file_path = cd.join("index2.html");
+
+        let content = r"<!DOCTYPE html>  
+        <html>  
+        <head>  
+            <title>Hello World</title>  
+        </head>  
+        <body>  
+            <h1>Hello World</h1>  
+        </body>  
+        </html>";
+
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+
+        let file_handler = FileHandler {
+            handler: types::Handler::File(file_path.to_str().unwrap().to_string()),
+        };
+
+        let request_body: MockBody = MockBody::new(b"");
+        let request = Request::builder().body(request_body).unwrap();
+
+        let response = file_handler.handle(request);
+
+        assert_eq!(&response.status(), &StatusCode::OK);
+        let response_body = String::from_utf8(
+            response
+                .body()
+                .clone()
+                .collect()
+                .await
+                .unwrap()
+                .to_bytes()
+                .to_vec(),
+        )
+        .unwrap();
+        assert_eq!(response_body, content);
+
+        // Ignore the result of removing file
+        _ = std::fs::remove_file(file_path);
+    }
+
+    #[tokio::test]
     async fn test_file_handler_return_404() {
         let file_handler = FileHandler {
             handler: types::Handler::File("not-exist-index.html".to_string()),
