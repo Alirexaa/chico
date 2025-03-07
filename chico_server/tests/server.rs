@@ -1,27 +1,37 @@
 use std::{
     io::{BufRead, BufReader},
+    path::Path,
     process::Stdio,
     time::Duration,
 };
 
 pub(crate) struct ServerFixture {
     process: std::process::Child,
+    executing_dir: String,
+    exe_path: String,
 }
 
 impl ServerFixture {
     pub fn run_app<T: AsRef<std::ffi::OsStr>>(config_path: T) -> ServerFixture {
         use assert_cmd::cargo::CommandCargoExt;
 
-        let process = std::process::Command::cargo_bin("chico")
-            .expect("Failed to find binary")
+        let mut binding = std::process::Command::cargo_bin("chico").expect("Failed to find binary");
+        let command = binding
             .arg("run")
             .arg("--config")
             .arg(config_path)
-            .stdout(Stdio::piped())
-            .spawn()
-            .expect("Failed to start server");
+            .stdout(Stdio::piped());
 
-        ServerFixture { process }
+        let process = command.spawn().expect("Failed to start server");
+
+        let program_path = Path::new(command.get_program());
+        let exe_path = program_path.to_str().unwrap().to_string();
+        let executing_dir = program_path.parent().unwrap().to_str().unwrap().to_string();
+        ServerFixture {
+            process,
+            executing_dir,
+            exe_path,
+        }
     }
 
     pub fn stop_app(&mut self) {
@@ -63,6 +73,15 @@ impl ServerFixture {
 
     pub fn wait_for_start(&mut self) {
         self.wait_for_text("Start listening requests on");
+    }
+
+    #[allow(dead_code)]
+    pub fn get_executing_dir(&self) -> &String {
+        &self.executing_dir
+    }
+    #[allow(dead_code)]
+    pub fn get_current_exe(&self) -> &String {
+        &self.exe_path
     }
 }
 
@@ -231,15 +250,14 @@ mod serial_integration {
     }
 
     #[tokio::test]
-    #[ignore = "reason"]
     async fn test_file_handler_return_ok() {
         let config_file_path =
             Path::new("resources/test_cases/file-handler/file_exist_return_ok.chf");
         assert!(config_file_path.exists());
 
-        let exe_path = std::env::current_exe().unwrap();
-        let cd = exe_path.parent().unwrap();
-        let file_path = cd.join("index.html");
+        let mut app = ServerFixture::run_app(config_file_path);
+
+        let file_path = Path::new(app.get_executing_dir()).join("index.html");
 
         let content = r"<!DOCTYPE html>  
         <html>  
@@ -254,8 +272,12 @@ mod serial_integration {
         let mut file = File::create(&file_path).unwrap();
         file.write_all(content.as_bytes()).unwrap();
 
-        let mut app = ServerFixture::run_app(config_file_path);
-        app.wait_for_start();
+        // For this test we don't wait for start
+        // Reason following error occurred when unwrap the response
+        // thread 'tokio-runtime-worker' panicked at std\src\io\stdio.rs:1123:9:
+        //failed printing to stdout: The pipe is being closed. (os error 232)
+        // app.wait_for_start();
+
         let response = reqwest::get("http://localhost:3000").await;
         app.stop_app();
         let response = response.unwrap();
