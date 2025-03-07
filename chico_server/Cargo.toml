@@ -15,6 +15,7 @@ hyper = { version = "1", features = ["full"] }
 http = "1.0"
 http-body-util = "0.1"
 hyper-util = { version = "0.1", features = ["full"] }
+tokio-util = "0.7.13"
 
 [dev-dependencies]
 rstest = "0.25.0"

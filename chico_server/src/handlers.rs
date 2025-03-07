@@ -1,4 +1,5 @@
 use chico_file::types::Config;
+use file::FileHandler;
 use redirect::RedirectHandler;
 
 use crate::{config::ConfigExt, virtual_host::VirtualHostExt};
@@ -9,6 +10,7 @@ use hyper::{
 };
 use respond::RespondHandler;
 
+mod file;
 mod redirect;
 mod respond;
 pub trait RequestHandler {
@@ -45,7 +47,9 @@ pub fn select_handler(request: &hyper::Request<impl Body>, config: Config) -> Ha
     let route = route.unwrap();
 
     let handler: HandlerEnum = match route.handler {
-        chico_file::types::Handler::File(_) => todo!(),
+        chico_file::types::Handler::File(_) => HandlerEnum::File(FileHandler {
+            handler: route.handler.clone(),
+        }),
         chico_file::types::Handler::Proxy(_) => todo!(),
         chico_file::types::Handler::Dir(_) => todo!(),
         chico_file::types::Handler::Browse(_) => todo!(),
@@ -71,6 +75,7 @@ pub enum HandlerEnum {
     Null(NullRequestHandler),
     Respond(RespondHandler),
     Redirect(RedirectHandler),
+    File(FileHandler),
 }
 
 impl RequestHandler for HandlerEnum {
@@ -79,6 +84,7 @@ impl RequestHandler for HandlerEnum {
             HandlerEnum::Null(handler) => handler.handle(request),
             HandlerEnum::Respond(handler) => handler.handle(request),
             HandlerEnum::Redirect(handler) => handler.handle(request),
+            HandlerEnum::File(handler) => handler.handle(request),
         }
     }
 }
