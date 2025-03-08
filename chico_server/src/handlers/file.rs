@@ -23,7 +23,7 @@ pub struct FileHandler {
 }
 
 impl RequestHandler for FileHandler {
-    fn handle(
+    async fn handle(
         &self,
         _request: hyper::Request<impl hyper::body::Body>,
     ) -> http::Response<http_body_util::Full<hyper::body::Bytes>> {
@@ -40,7 +40,7 @@ impl RequestHandler for FileHandler {
 
             if file.is_err() {
                 let err_kind = file.as_ref().err().unwrap().kind();
-                return handle_file_error(_request, err_kind);
+                return handle_file_error(_request, err_kind).await;
             }
 
             let mut file: File = file.unwrap();
@@ -51,7 +51,7 @@ impl RequestHandler for FileHandler {
             if read_result.is_err() {
                 let err_kind = read_result.as_ref().err().unwrap().kind();
 
-                return handle_file_error(_request, err_kind);
+                return handle_file_error(_request, err_kind).await;
             }
 
             let mut builder = Response::builder().status(StatusCode::OK);
@@ -71,7 +71,7 @@ impl RequestHandler for FileHandler {
     }
 }
 
-fn handle_file_error(
+async fn handle_file_error(
     _request: http::Request<impl hyper::body::Body>,
     error: ErrorKind,
 ) -> Response<Full<Bytes>> {
@@ -101,7 +101,7 @@ fn handle_file_error(
             },
         },
     };
-    return handler.handle(_request);
+    return handler.handle(_request).await;
 }
 
 #[cfg(test)]
@@ -145,7 +145,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
-        let response = file_handler.handle(request);
+        let response = file_handler.handle(request).await;
 
         assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(
@@ -201,7 +201,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
-        let response = file_handler.handle(request);
+        let response = file_handler.handle(request).await;
 
         assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(
@@ -240,7 +240,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
-        let response = file_handler.handle(request);
+        let response = file_handler.handle(request).await;
 
         assert_eq!(&response.status(), &StatusCode::NOT_FOUND);
         let response_body = String::from_utf8(
@@ -270,7 +270,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
-        let response = file_handler.handle(request);
+        let response = file_handler.handle(request).await;
 
         assert_eq!(&response.status(), &StatusCode::FORBIDDEN);
         let response_body = String::from_utf8(

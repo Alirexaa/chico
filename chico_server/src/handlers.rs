@@ -14,14 +14,14 @@ mod file;
 mod redirect;
 mod respond;
 pub trait RequestHandler {
-    fn handle(&self, _request: hyper::Request<impl Body>) -> Response<Full<Bytes>>;
+    async fn handle(&self, _request: hyper::Request<impl Body>) -> Response<Full<Bytes>>;
 }
 
 #[derive(PartialEq, Debug)]
 pub struct NullRequestHandler {}
 
 impl RequestHandler for NullRequestHandler {
-    fn handle(&self, _request: hyper::Request<impl Body>) -> Response<Full<Bytes>> {
+    async fn handle(&self, _request: hyper::Request<impl Body>) -> Response<Full<Bytes>> {
         todo!()
     }
 }
@@ -79,12 +79,12 @@ pub enum HandlerEnum {
 }
 
 impl RequestHandler for HandlerEnum {
-    fn handle(&self, request: hyper::Request<impl Body>) -> Response<Full<Bytes>> {
+    async fn handle(&self, request: hyper::Request<impl Body>) -> Response<Full<Bytes>> {
         match self {
-            HandlerEnum::Null(handler) => handler.handle(request),
-            HandlerEnum::Respond(handler) => handler.handle(request),
-            HandlerEnum::Redirect(handler) => handler.handle(request),
-            HandlerEnum::File(handler) => handler.handle(request),
+            HandlerEnum::Null(handler) => handler.handle(request).await,
+            HandlerEnum::Respond(handler) => handler.handle(request).await,
+            HandlerEnum::Redirect(handler) => handler.handle(request).await,
+            HandlerEnum::File(handler) => handler.handle(request).await,
         }
     }
 }
