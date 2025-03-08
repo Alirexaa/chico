@@ -28,6 +28,9 @@ impl RequestHandler for FileHandler {
         if let types::Handler::File(file_path) = &self.handler {
             let mut path = PathBuf::from(file_path);
 
+            if path.is_dir() {
+                return handle_file_error(_request, ErrorKind::IsADirectory).await;
+            }
             if !path.is_absolute() {
                 let exe_path = env::current_exe().unwrap();
                 let cd = exe_path.parent().unwrap();
