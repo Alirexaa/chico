@@ -11,7 +11,7 @@ pub struct RespondHandler {
 }
 
 impl RequestHandler for RespondHandler {
-    fn handle(&self, _request: hyper::Request<impl Body>) -> hyper::Response<Full<Bytes>> {
+    async fn handle(&self, _request: hyper::Request<impl Body>) -> hyper::Response<Full<Bytes>> {
         if let types::Handler::Respond { status, body } = &self.handler {
             let status = status.unwrap_or(status::StatusCode::OK.as_u16());
             let body = body.as_ref().unwrap_or(&String::new()).clone();
@@ -50,7 +50,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
 
         let request = Request::builder().body(request_body).unwrap();
-        let response = respond_handler.handle(request);
+        let response = respond_handler.handle(request).await;
 
         let response_body = String::from_utf8(
             response
@@ -82,7 +82,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"Hello, world!");
 
         let request = Request::builder().body(request_body).unwrap();
-        let response = respond_handler.handle(request);
+        let response = respond_handler.handle(request).await;
 
         let response_body = String::from_utf8(
             response
@@ -114,7 +114,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"Access denied");
 
         let request = Request::builder().body(request_body).unwrap();
-        let response = respond_handler.handle(request);
+        let response = respond_handler.handle(request).await;
 
         let response_body = String::from_utf8(
             response

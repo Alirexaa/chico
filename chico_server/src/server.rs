@@ -61,6 +61,6 @@ async fn handle_request(
     request: Request<impl Body>,
     config: Config,
 ) -> Result<Response<Full<Bytes>>, Infallible> {
-    let res = select_handler(&request, config).handle(request);
+    let res = select_handler(&request, config).handle(request).await;
     Ok(res)
 }

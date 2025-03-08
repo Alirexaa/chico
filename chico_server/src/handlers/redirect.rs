@@ -10,7 +10,7 @@ pub struct RedirectHandler {
 }
 
 impl RequestHandler for RedirectHandler {
-    fn handle(
+    async fn handle(
         &self,
         _request: hyper::Request<impl hyper::body::Body>,
     ) -> http::Response<http_body_util::Full<hyper::body::Bytes>> {
@@ -42,8 +42,8 @@ mod tests {
 
     use super::RedirectHandler;
 
-    #[test]
-    fn test_redirect_handler_not_specified_status() {
+    #[tokio::test]
+    async fn test_redirect_handler_not_specified_status() {
         let redirect_handler = RedirectHandler {
             handler: types::Handler::Redirect {
                 path: Some("/new-path".to_string()),
@@ -54,7 +54,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
-        let response = redirect_handler.handle(request);
+        let response = redirect_handler.handle(request).await;
 
         assert_eq!(&response.status(), &StatusCode::FOUND);
         assert_eq!(
@@ -68,8 +68,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_redirect_handler_specified_status() {
+    #[tokio::test]
+    async fn test_redirect_handler_specified_status() {
         let redirect_handler = RedirectHandler {
             handler: types::Handler::Redirect {
                 path: Some("/new-path".to_string()),
@@ -80,7 +80,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
-        let response = redirect_handler.handle(request);
+        let response = redirect_handler.handle(request).await;
 
         assert_eq!(&response.status(), &StatusCode::TEMPORARY_REDIRECT);
         assert_eq!(
