@@ -14,6 +14,9 @@ use crate::handlers::respond::RespondHandler;
 
 use super::RequestHandler;
 
+static MIME_DICT: std::sync::LazyLock<mimee::MimeDict> =
+    std::sync::LazyLock::new(|| mimee::MimeDict::new());
+
 #[derive(PartialEq, Debug)]
 pub struct FileHandler {
     pub handler: types::Handler,
@@ -51,10 +54,14 @@ impl RequestHandler for FileHandler {
                 return handle_file_error(_request, err_kind);
             }
 
-            Response::builder()
-                .status(StatusCode::OK)
-                .body(Full::new(Bytes::from_iter(buf)))
-                .unwrap()
+            let mut builder = Response::builder().status(StatusCode::OK);
+
+            let content_type = MIME_DICT.get_content_type(file_path.to_string());
+            if content_type.is_some() {
+                builder = builder.header(http::header::CONTENT_TYPE, content_type.unwrap());
+            }
+
+            builder.body(Full::new(Bytes::from_iter(buf))).unwrap()
         } else {
             unimplemented!(
                 "Only file handler is supported. Given handler was {}",
