@@ -36,7 +36,7 @@ impl RequestHandler for FileHandler {
 
             let path_exist = tokio::fs::try_exists(&path).await;
 
-            if path_exist.is_ok() {
+            if let Ok(true) = path_exist {
                 let metadata = tokio::fs::metadata(&path).await;
                 if metadata.is_err() {
                     let err_kind = metadata.as_ref().err().unwrap().kind();
