@@ -1,8 +1,7 @@
 use chico_file::types;
 use http::{Response, StatusCode};
-use http_body_util::Full;
 
-use super::RequestHandler;
+use super::{full, BoxBody, RequestHandler};
 
 #[derive(PartialEq, Debug)]
 pub struct RedirectHandler {
@@ -13,7 +12,7 @@ impl RequestHandler for RedirectHandler {
     async fn handle(
         &self,
         _request: hyper::Request<impl hyper::body::Body>,
-    ) -> http::Response<http_body_util::Full<hyper::body::Bytes>> {
+    ) -> http::Response<BoxBody> {
         if let types::Handler::Redirect { path, status_code } = &self.handler {
             // Based on chico file path is always some
             let path = path.clone().expect("Expected path value not provided.");
@@ -22,7 +21,7 @@ impl RequestHandler for RedirectHandler {
             Response::builder()
                 .status(status_code)
                 .header(http::header::LOCATION, path)
-                .body(Full::default())
+                .body(full(""))
                 .unwrap()
         } else {
             unimplemented!(

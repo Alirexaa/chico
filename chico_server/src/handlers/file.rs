@@ -1,18 +1,16 @@
-use std::{
-    env,
-    fs::File,
-    io::{ErrorKind, Read},
-    path::PathBuf,
-};
+use std::{env, io::ErrorKind, path::PathBuf};
 
 use chico_file::types;
+use futures_util::TryStreamExt;
 use http::{Response, StatusCode};
-use http_body_util::Full;
-use hyper::body::Bytes;
+use http_body_util::{BodyExt, StreamBody};
+use hyper::body::Frame;
+use tokio::fs::File;
+use tokio_util::io::ReaderStream;
 
 use crate::handlers::respond::RespondHandler;
 
-use super::RequestHandler;
+use super::{BoxBody, RequestHandler};
 
 static MIME_DICT: std::sync::LazyLock<mimee::MimeDict> =
     std::sync::LazyLock::new(|| mimee::MimeDict::new());
@@ -26,7 +24,7 @@ impl RequestHandler for FileHandler {
     async fn handle(
         &self,
         _request: hyper::Request<impl hyper::body::Body>,
-    ) -> http::Response<http_body_util::Full<hyper::body::Bytes>> {
+    ) -> http::Response<BoxBody> {
         if let types::Handler::File(file_path) = &self.handler {
             let mut path = PathBuf::from(file_path);
 
@@ -36,23 +34,14 @@ impl RequestHandler for FileHandler {
                 path = cd.join(path);
             };
 
-            let file = File::open(path);
+            let file = File::open(path).await;
 
             if file.is_err() {
                 let err_kind = file.as_ref().err().unwrap().kind();
                 return handle_file_error(_request, err_kind).await;
             }
 
-            let mut file: File = file.unwrap();
-
-            let mut buf = vec![];
-
-            let read_result = file.read_to_end(&mut buf);
-            if read_result.is_err() {
-                let err_kind = read_result.as_ref().err().unwrap().kind();
-
-                return handle_file_error(_request, err_kind).await;
-            }
+            let file: File = file.unwrap();
 
             let mut builder = Response::builder().status(StatusCode::OK);
 
@@ -61,7 +50,14 @@ impl RequestHandler for FileHandler {
                 builder = builder.header(http::header::CONTENT_TYPE, content_type.unwrap());
             }
 
-            builder.body(Full::new(Bytes::from_iter(buf))).unwrap()
+            let reader_stream = ReaderStream::new(file);
+
+            // Convert to http_body_util::BoxBody
+            let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
+            let boxed_body = stream_body.boxed();
+
+            let response = builder.body(boxed_body).unwrap();
+            response
         } else {
             unimplemented!(
                 "Only file handler is supported. Given handler was {}",
@@ -74,7 +70,7 @@ impl RequestHandler for FileHandler {
 async fn handle_file_error(
     _request: http::Request<impl hyper::body::Body>,
     error: ErrorKind,
-) -> Response<Full<Bytes>> {
+) -> Response<BoxBody> {
     let handler = match error {
         ErrorKind::NotFound => RespondHandler {
             handler: types::Handler::Respond {
@@ -160,8 +156,7 @@ mod tests {
 
         let response_body = String::from_utf8(
             response
-                .body()
-                .clone()
+                .boxed()
                 .collect()
                 .await
                 .unwrap()
@@ -216,8 +211,7 @@ mod tests {
         assert_eq!(&response.status(), &StatusCode::OK);
         let response_body = String::from_utf8(
             response
-                .body()
-                .clone()
+                .boxed()
                 .collect()
                 .await
                 .unwrap()
@@ -245,8 +239,7 @@ mod tests {
         assert_eq!(&response.status(), &StatusCode::NOT_FOUND);
         let response_body = String::from_utf8(
             response
-                .body()
-                .clone()
+                .boxed()
                 .collect()
                 .await
                 .unwrap()
@@ -275,8 +268,7 @@ mod tests {
         assert_eq!(&response.status(), &StatusCode::FORBIDDEN);
         let response_body = String::from_utf8(
             response
-                .body()
-                .clone()
+                .boxed()
                 .collect()
                 .await
                 .unwrap()
