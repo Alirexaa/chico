@@ -28,14 +28,27 @@ impl RequestHandler for FileHandler {
         if let types::Handler::File(file_path) = &self.handler {
             let mut path = PathBuf::from(file_path);
 
-            if path.is_dir() {
-                return handle_file_error(_request, ErrorKind::IsADirectory).await;
-            }
             if !path.is_absolute() {
                 let exe_path = env::current_exe().unwrap();
                 let cd = exe_path.parent().unwrap();
                 path = cd.join(path);
             };
+
+            let path_exist = tokio::fs::try_exists(&path).await;
+
+            if path_exist.is_ok() {
+                let metadata = tokio::fs::metadata(&path).await;
+                if metadata.is_err() {
+                    let err_kind = metadata.as_ref().err().unwrap().kind();
+                    return handle_file_error(_request, err_kind).await;
+                }
+                let metadata = metadata.unwrap();
+                if metadata.is_dir() {
+                    return handle_file_error(_request, ErrorKind::IsADirectory).await;
+                }
+            } else {
+                return handle_file_error(_request, ErrorKind::NotFound).await;
+            }
 
             let file = File::open(path).await;
 
