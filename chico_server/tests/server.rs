@@ -304,6 +304,16 @@ mod serial_integration {
 
         let response = response.unwrap();
         assert_eq!(&response.status(), &StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(http::header::CONTENT_TYPE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "text/html"
+        );
+        assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(&response.text().await.unwrap(), content);
     }
 

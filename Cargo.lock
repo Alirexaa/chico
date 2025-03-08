@@ -188,6 +188,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "mimee",
  "predicates",
  "reqwest",
  "rstest",
@@ -854,6 +855,12 @@ name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
+
+[[package]]
+name = "mimee"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4149ea534dbbbbc0ecccd1c0ac8b4c391b6256e9b187f51372a590e57876bd5f"
 
 [[package]]
 name = "minimal-lexical"
