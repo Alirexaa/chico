@@ -148,6 +148,16 @@ mod tests {
         let response = file_handler.handle(request);
 
         assert_eq!(&response.status(), &StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(http::header::CONTENT_TYPE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "text/html"
+        );
+
         let response_body = String::from_utf8(
             response
                 .body()
@@ -193,6 +203,16 @@ mod tests {
 
         let response = file_handler.handle(request);
 
+        assert_eq!(&response.status(), &StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(http::header::CONTENT_TYPE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "text/html"
+        );
         assert_eq!(&response.status(), &StatusCode::OK);
         let response_body = String::from_utf8(
             response
