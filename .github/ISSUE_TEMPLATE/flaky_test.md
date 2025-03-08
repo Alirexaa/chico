@@ -1,5 +1,6 @@
 ---
 title: Flaky test `{{ env.TEST_NAME }}`
+labels: flaky-test
 ---
 
 ## Last report
