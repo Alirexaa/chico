@@ -1,9 +1,8 @@
 use chico_file::types;
 use http::{status, Response};
-use http_body_util::Full;
-use hyper::body::{Body, Bytes};
+use hyper::body::Body;
 
-use super::RequestHandler;
+use super::{full, BoxBody, RequestHandler};
 
 #[derive(PartialEq, Debug)]
 pub struct RespondHandler {
@@ -11,15 +10,12 @@ pub struct RespondHandler {
 }
 
 impl RequestHandler for RespondHandler {
-    async fn handle(&self, _request: hyper::Request<impl Body>) -> hyper::Response<Full<Bytes>> {
+    async fn handle(&self, _request: hyper::Request<impl Body>) -> hyper::Response<BoxBody> {
         if let types::Handler::Respond { status, body } = &self.handler {
             let status = status.unwrap_or(status::StatusCode::OK.as_u16());
             let body = body.as_ref().unwrap_or(&String::new()).clone();
 
-            Response::builder()
-                .status(status)
-                .body(Full::new(Bytes::from(body)))
-                .unwrap()
+            Response::builder().status(status).body(full(body)).unwrap()
         } else {
             unimplemented!(
                 "Only respond handler is supported. Given handler was {}",
@@ -52,10 +48,11 @@ mod tests {
         let request = Request::builder().body(request_body).unwrap();
         let response = respond_handler.handle(request).await;
 
-        let response_body = String::from_utf8(
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = String::from_utf8(
             response
-                .body()
-                .clone()
+                .boxed()
                 .collect()
                 .await
                 .unwrap()
@@ -64,8 +61,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(response_body, "");
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(body, "");
     }
 
     #[tokio::test]
@@ -84,10 +80,11 @@ mod tests {
         let request = Request::builder().body(request_body).unwrap();
         let response = respond_handler.handle(request).await;
 
+        assert_eq!(response.status(), StatusCode::OK);
+
         let response_body = String::from_utf8(
             response
-                .body()
-                .clone()
+                .boxed()
                 .collect()
                 .await
                 .unwrap()
@@ -97,7 +94,6 @@ mod tests {
         .unwrap();
 
         assert_eq!(response_body, "Hello, world!");
-        assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[tokio::test]
@@ -116,10 +112,11 @@ mod tests {
         let request = Request::builder().body(request_body).unwrap();
         let response = respond_handler.handle(request).await;
 
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
         let response_body = String::from_utf8(
             response
-                .body()
-                .clone()
+                .boxed()
                 .collect()
                 .await
                 .unwrap()
@@ -129,6 +126,5 @@ mod tests {
         .unwrap();
 
         assert_eq!(response_body, "Access denied");
-        assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
 }

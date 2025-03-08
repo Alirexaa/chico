@@ -1,16 +1,11 @@
 use chico_file::types::Config;
 use http::{Request, Response};
-use http_body_util::Full;
-use hyper::{
-    body::{Body, Bytes},
-    server::conn::http1,
-    service::service_fn,
-};
+use hyper::{body::Body, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
 use std::{convert::Infallible, net::SocketAddr};
 use tokio::net::TcpListener;
 
-use crate::handlers::{select_handler, RequestHandler};
+use crate::handlers::{select_handler, BoxBody, RequestHandler};
 
 pub async fn run_server(config: Config) {
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -60,7 +55,6 @@ pub async fn run_server(config: Config) {
 async fn handle_request(
     request: Request<impl Body>,
     config: Config,
-) -> Result<Response<Full<Bytes>>, Infallible> {
-    let res = select_handler(&request, config).handle(request).await;
-    Ok(res)
+) -> Result<Response<BoxBody>, Infallible> {
+    Ok(select_handler(&request, config).handle(request).await)
 }

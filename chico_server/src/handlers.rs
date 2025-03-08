@@ -3,27 +3,18 @@ use file::FileHandler;
 use redirect::RedirectHandler;
 
 use crate::{config::ConfigExt, virtual_host::VirtualHostExt};
-use http_body_util::Full;
 use hyper::{
     body::{Body, Bytes},
     Response,
 };
 use respond::RespondHandler;
+pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, std::io::Error>;
 
 mod file;
 mod redirect;
 mod respond;
 pub trait RequestHandler {
-    async fn handle(&self, _request: hyper::Request<impl Body>) -> Response<Full<Bytes>>;
-}
-
-#[derive(PartialEq, Debug)]
-pub struct NullRequestHandler {}
-
-impl RequestHandler for NullRequestHandler {
-    async fn handle(&self, _request: hyper::Request<impl Body>) -> Response<Full<Bytes>> {
-        todo!()
-    }
+    async fn handle(&self, _request: hyper::Request<impl Body>) -> Response<BoxBody>;
 }
 
 #[allow(dead_code)]
@@ -69,19 +60,24 @@ pub fn select_handler(request: &hyper::Request<impl Body>, config: Config) -> Ha
     handler
 }
 
+pub fn full<T: Into<Bytes>>(chunk: T) -> BoxBody {
+    use http_body_util::{BodyExt, Full};
+    Full::new(chunk.into())
+        .map_err(|never| match never {})
+        .boxed()
+}
+
 #[derive(PartialEq, Debug)]
 pub enum HandlerEnum {
     #[allow(dead_code)]
-    Null(NullRequestHandler),
     Respond(RespondHandler),
     Redirect(RedirectHandler),
     File(FileHandler),
 }
 
 impl RequestHandler for HandlerEnum {
-    async fn handle(&self, request: hyper::Request<impl Body>) -> Response<Full<Bytes>> {
+    async fn handle(&self, request: hyper::Request<impl Body>) -> Response<BoxBody> {
         match self {
-            HandlerEnum::Null(handler) => handler.handle(request).await,
             HandlerEnum::Respond(handler) => handler.handle(request).await,
             HandlerEnum::Redirect(handler) => handler.handle(request).await,
             HandlerEnum::File(handler) => handler.handle(request).await,
