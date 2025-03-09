@@ -61,7 +61,7 @@ impl RequestHandler for FileHandler {
 
             let mut builder = Response::builder().status(StatusCode::OK);
 
-            let content_type = MIME_DICT.get_content_type(file_path.to_string());
+            let content_type = MIME_DICT.get_content_type(file_path);
             if content_type.is_some() {
                 builder = builder.header(http::header::CONTENT_TYPE, content_type.unwrap());
             }
