@@ -12,3 +12,7 @@ updates:
     commit-message:  
       prefix: "deps" # Prefix for the commit message  
     open-pull-requests-limit: 10 # Limit the number of open PRs  
+  - package-ecosystem: "github-actions" # See documentation for possible values
+    directory: "/"
+    schedule:
+      interval: "weekly"
