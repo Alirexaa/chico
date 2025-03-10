@@ -6,7 +6,69 @@ use super::{full, BoxBody, RequestHandler};
 
 #[derive(PartialEq, Debug)]
 pub struct RespondHandler {
-    pub handler: types::Handler,
+    handler: types::Handler,
+}
+
+impl RespondHandler {
+    #[allow(dead_code)]
+    pub fn new(status: u16, body: Option<String>) -> RespondHandler {
+        RespondHandler {
+            handler: types::Handler::Respond {
+                status: Some(status),
+                body: (body),
+            },
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn ok() -> RespondHandler {
+        RespondHandler::new(200, None)
+    }
+
+    #[allow(dead_code)]
+    pub fn ok_with_body(body: String) -> RespondHandler {
+        RespondHandler::new(200, Some(body))
+    }
+
+    #[allow(dead_code)]
+    pub fn bad_request() -> RespondHandler {
+        RespondHandler::new(400, None)
+    }
+
+    #[allow(dead_code)]
+    pub fn bad_request_with_body(body: String) -> RespondHandler {
+        RespondHandler::new(400, Some(body))
+    }
+
+    #[allow(dead_code)]
+    pub fn not_found() -> RespondHandler {
+        RespondHandler::new(404, None)
+    }
+
+    #[allow(dead_code)]
+    pub fn not_found_with_body(body: String) -> RespondHandler {
+        RespondHandler::new(404, Some(body))
+    }
+
+    #[allow(dead_code)]
+    pub fn forbidden() -> RespondHandler {
+        RespondHandler::new(403, None)
+    }
+
+    #[allow(dead_code)]
+    pub fn forbidden_with_body(body: String) -> RespondHandler {
+        RespondHandler::new(403, Some(body))
+    }
+
+    #[allow(dead_code)]
+    pub fn internal_server_error() -> RespondHandler {
+        RespondHandler::new(500, None)
+    }
+
+    #[allow(dead_code)]
+    pub fn internal_server_error_with_body(body: String) -> RespondHandler {
+        RespondHandler::new(500, Some(body))
+    }
 }
 
 impl RequestHandler for RespondHandler {

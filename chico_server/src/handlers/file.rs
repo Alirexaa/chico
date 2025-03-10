@@ -88,30 +88,10 @@ async fn handle_file_error(
     error: ErrorKind,
 ) -> Response<BoxBody> {
     let handler = match error {
-        ErrorKind::NotFound => RespondHandler {
-            handler: types::Handler::Respond {
-                status: Some(404),
-                body: None,
-            },
-        },
-        ErrorKind::PermissionDenied => RespondHandler {
-            handler: types::Handler::Respond {
-                status: Some(403),
-                body: None,
-            },
-        },
-        ErrorKind::IsADirectory => RespondHandler {
-            handler: types::Handler::Respond {
-                status: Some(403),
-                body: None,
-            },
-        },
-        _ => RespondHandler {
-            handler: types::Handler::Respond {
-                status: Some(500),
-                body: None,
-            },
-        },
+        ErrorKind::NotFound => RespondHandler::not_found(),
+        ErrorKind::PermissionDenied => RespondHandler::forbidden(),
+        ErrorKind::IsADirectory => RespondHandler::forbidden(),
+        _ => RespondHandler::internal_server_error(),
     };
     return handler.handle(_request).await;
 }
