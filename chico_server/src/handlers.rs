@@ -19,8 +19,14 @@ pub trait RequestHandler {
 
 #[allow(dead_code)]
 pub fn select_handler(request: &hyper::Request<impl Body>, config: Config) -> HandlerEnum {
-    //todo handle unwrap
-    let host = request.headers().get(http::header::HOST).unwrap();
+    let host = request.headers().get(http::header::HOST);
+
+    if host.is_none() {
+        return HandlerEnum::bad_request_host_header_not_found_respond_handler();
+    }
+
+    let host = host.unwrap();
+
     let vh = &config.find_virtual_host(host.to_str().unwrap());
 
     if vh.is_none() {
@@ -104,6 +110,16 @@ impl HandlerEnum {
             },
         })
     }
+
+    pub fn bad_request_host_header_not_found_respond_handler() -> HandlerEnum {
+        let body = "Host header is missing in the request.";
+        HandlerEnum::Respond(RespondHandler {
+            handler: chico_file::types::Handler::Respond {
+                status: Some(400),
+                body: Some(String::from(body)),
+            },
+        })
+    }
 }
 
 #[cfg(test)]
@@ -184,5 +200,49 @@ mod tests {
         });
 
         assert_eq!(handler, HandlerEnum::not_found_respond_handler())
+    }
+
+    #[test]
+    fn test_handler_enum_bad_request_host_header_not_found_respond_handler() {
+        let body = "Host header is missing in the request.";
+
+        let handler = HandlerEnum::Respond(RespondHandler {
+            handler: chico_file::types::Handler::Respond {
+                status: Some(400),
+                body: Some(String::from(body)),
+            },
+        });
+
+        assert_eq!(
+            handler,
+            HandlerEnum::bad_request_host_header_not_found_respond_handler()
+        )
+    }
+
+    #[test]
+    fn test_select_handler_should_return_not_bad_request_respond_handler_when_host_header_not_provided(
+    ) {
+        let config = Config {
+            virtual_hosts: vec![VirtualHost {
+                domain: "localhost".to_string(),
+                routes: vec![Route {
+                    handler: Handler::File("index.html".to_string()),
+                    path: "/".to_string(),
+                    middlewares: vec![],
+                }],
+            }],
+        };
+
+        let request = Request::builder()
+            .uri("http://localhost/blog")
+            .body(MockBody::new(b""))
+            .unwrap();
+
+        let handler = select_handler(&request, config);
+
+        assert_eq!(
+            HandlerEnum::bad_request_host_header_not_found_respond_handler(),
+            handler
+        )
     }
 }
