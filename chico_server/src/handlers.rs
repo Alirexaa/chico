@@ -43,17 +43,15 @@ pub fn select_handler(request: &hyper::Request<impl Body>, config: Config) -> Ha
 
     let route = route.unwrap();
 
-    let handler: HandlerEnum = match route.handler {
+    let handler: HandlerEnum = match &route.handler {
         chico_file::types::Handler::File(_) => HandlerEnum::File(FileHandler {
             handler: route.handler.clone(),
         }),
         chico_file::types::Handler::Proxy(_) => todo!(),
         chico_file::types::Handler::Dir(_) => todo!(),
         chico_file::types::Handler::Browse(_) => todo!(),
-        chico_file::types::Handler::Respond { status: _, body: _ } => {
-            HandlerEnum::Respond(RespondHandler {
-                handler: route.handler.clone(),
-            })
+        chico_file::types::Handler::Respond { status, body } => {
+            HandlerEnum::Respond(RespondHandler::new(status.unwrap_or(200), body.clone()))
         }
         chico_file::types::Handler::Redirect {
             path: _,
@@ -103,22 +101,12 @@ impl HandlerEnum {
 </body>  
 </html>";
 
-        HandlerEnum::Respond(RespondHandler {
-            handler: chico_file::types::Handler::Respond {
-                status: Some(404),
-                body: Some(body.to_string()),
-            },
-        })
+        HandlerEnum::Respond(RespondHandler::not_found_with_body(body.to_string()))
     }
 
     pub fn bad_request_host_header_not_found_respond_handler() -> HandlerEnum {
         let body = "Host header is missing in the request.";
-        HandlerEnum::Respond(RespondHandler {
-            handler: chico_file::types::Handler::Respond {
-                status: Some(400),
-                body: Some(String::from(body)),
-            },
-        })
+        HandlerEnum::Respond(RespondHandler::bad_request_with_body(String::from(body)))
     }
 }
 
@@ -192,12 +180,7 @@ mod tests {
 </body>  
 </html>";
 
-        let handler = HandlerEnum::Respond(RespondHandler {
-            handler: chico_file::types::Handler::Respond {
-                status: Some(404),
-                body: Some(body.to_string()),
-            },
-        });
+        let handler = HandlerEnum::Respond(RespondHandler::not_found_with_body(body.to_string()));
 
         assert_eq!(handler, HandlerEnum::not_found_respond_handler())
     }
@@ -206,12 +189,8 @@ mod tests {
     fn test_handler_enum_bad_request_host_header_not_found_respond_handler() {
         let body = "Host header is missing in the request.";
 
-        let handler = HandlerEnum::Respond(RespondHandler {
-            handler: chico_file::types::Handler::Respond {
-                status: Some(400),
-                body: Some(String::from(body)),
-            },
-        });
+        let handler =
+            HandlerEnum::Respond(RespondHandler::bad_request_with_body(String::from(body)));
 
         assert_eq!(
             handler,
