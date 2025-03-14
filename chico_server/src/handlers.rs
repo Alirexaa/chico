@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use chico_file::types::Config;
 use file::FileHandler;
 use redirect::RedirectHandler;
@@ -18,7 +20,7 @@ pub trait RequestHandler {
 }
 
 #[allow(dead_code)]
-pub fn select_handler(request: &hyper::Request<impl Body>, config: Config) -> HandlerEnum {
+pub fn select_handler(request: &hyper::Request<impl Body>, config: Arc<Config>) -> HandlerEnum {
     let host = request.headers().get(http::header::HOST);
 
     if host.is_none() {
@@ -112,6 +114,8 @@ impl HandlerEnum {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use chico_file::types::{Config, Handler, Route, VirtualHost};
     use http::Request;
 
@@ -139,7 +143,7 @@ mod tests {
             .body(MockBody::new(b""))
             .unwrap();
 
-        let handler = select_handler(&request, config);
+        let handler = select_handler(&request, Arc::new(config));
 
         assert_eq!(HandlerEnum::not_found_respond_handler(), handler)
     }
@@ -163,7 +167,7 @@ mod tests {
             .body(MockBody::new(b""))
             .unwrap();
 
-        let handler = select_handler(&request, config);
+        let handler = select_handler(&request, Arc::new(config));
 
         assert_eq!(HandlerEnum::not_found_respond_handler(), handler)
     }
@@ -217,7 +221,7 @@ mod tests {
             .body(MockBody::new(b""))
             .unwrap();
 
-        let handler = select_handler(&request, config);
+        let handler = select_handler(&request, Arc::new(config));
 
         assert_eq!(
             HandlerEnum::bad_request_host_header_not_found_respond_handler(),

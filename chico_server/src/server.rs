@@ -54,11 +54,17 @@ async fn handle_listener(config: Arc<Config>, listener: TcpListener) -> ! {
                 continue;
             }
         };
-        handle_connection(&config, stream);
+        let config_clone = config.clone();
+        tokio::spawn(async move {
+            _ = handle_connection(config_clone, stream).await;
+        });
     }
 }
 
-fn handle_connection(config: &Config, stream: tokio::net::TcpStream) {
+async fn handle_connection(
+    config: Arc<Config>,
+    stream: tokio::net::TcpStream,
+) -> Result<(), tokio::task::JoinError> {
     // Use an adapter to access something implementing `tokio::io` traits as if they implement
     // `hyper::rt` IO traits.
     let io = TokioIo::new(stream);
@@ -80,12 +86,13 @@ fn handle_connection(config: &Config, stream: tokio::net::TcpStream) {
         {
             eprintln!("Error serving connection: {:?}", err);
         }
-    });
+    })
+    .await
 }
 
 async fn handle_request(
     request: Request<impl Body>,
-    config: Config,
+    config: Arc<Config>,
 ) -> Result<Response<BoxBody>, Infallible> {
     Ok(select_handler(&request, config).handle(request).await)
 }
