@@ -119,10 +119,7 @@ fn parse_handler(input: &str) -> IResult<&str, types::Handler> {
         map(preceded(tag("browse"), parse_value), types::Handler::Browse),
         map(
             preceded(tag("respond"), parse_respond_handler_args),
-            |(status, body)| types::Handler::Respond {
-                status: status,
-                body: body,
-            },
+            |(status, body)| types::Handler::Respond { status, body },
         ),
         map(
             preceded(tag("redirect"), parse_redirect_handler_args),
