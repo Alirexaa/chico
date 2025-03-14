@@ -2,6 +2,7 @@ use chico_file::types::Config;
 use http::{Request, Response};
 use hyper::{body::Body, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
+use log::{error, info};
 use std::{convert::Infallible, net::SocketAddr, sync::Arc};
 use tokio::net::TcpListener;
 
@@ -18,7 +19,7 @@ pub async fn run_server(config: Config) {
         let listener = match TcpListener::bind(addr).await {
             Ok(listener) => listener,
             Err(e) => {
-                eprintln!("Failed to bind to address {}: {:?}", addr, e);
+                error!("Failed to bind to address {}: {:?}", addr, e);
                 return;
             }
         };
@@ -26,7 +27,7 @@ pub async fn run_server(config: Config) {
 
         // We wait for following text to be written in standard output (stdout) in integration tests.
         // Any change at this message should be applied in tests.
-        println!(
+        info!(
             "Start listening to incoming requests on port {}",
             &addr.port()
         );
@@ -53,7 +54,7 @@ async fn handle_listener(config: Arc<Config>, listener: TcpListener) -> ! {
         let (stream, _) = match listener.accept().await {
             Ok(conn) => conn,
             Err(e) => {
-                eprintln!("Error accepting connection: {:?}", e);
+                error!("Error accepting connection: {:?}", e);
                 continue;
             }
         };
@@ -83,7 +84,7 @@ async fn handle_connection(config: Arc<Config>, stream: tokio::net::TcpStream) {
         .serve_connection(io, service)
         .await
     {
-        eprintln!("Error serving connection: {:?}", err);
+        error!("Error serving connection: {:?}", err);
     }
 }
 
