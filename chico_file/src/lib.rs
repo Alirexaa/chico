@@ -1332,7 +1332,6 @@ mod tests {
                 }
             "#; // Missing closing brace
 
-            println!("{:?}", parse_config(input));
             assert!(parse_config(input).is_err());
         }
 

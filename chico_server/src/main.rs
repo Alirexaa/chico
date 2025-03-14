@@ -1,6 +1,7 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
 use clap::Parser;
 use config::validate_config_file;
+use log::error;
 use server::run_server;
 use std::process::exit;
 mod cli;
@@ -13,13 +14,18 @@ mod virtual_host;
 
 #[tokio::main]
 async fn main() {
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .target(env_logger::Target::Stdout)
+        .init();
+
     let cli = cli::CLI::parse();
     match cli.command {
         cli::Commands::Run { config } => {
             let conf = validate_config_file(config.as_str())
                 .await
                 .unwrap_or_else(|err| {
-                    eprintln!("{}", err);
+                    error!("{}", err);
                     exit(1);
                 });
             run_server(conf).await
