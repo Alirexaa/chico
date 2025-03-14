@@ -23,6 +23,9 @@ pub async fn run_server(config: Config) {
             }
         };
         listeners.push(listener);
+
+        // We wait for following text to be written in standard output (stdout) in integration tests.
+        // Any change at this message should be applied in tests.
         println!(
             "Start listening to incoming requests on port {}",
             &addr.port()
@@ -55,21 +58,19 @@ async fn handle_listener(config: Arc<Config>, listener: TcpListener) -> ! {
             }
         };
         let config_clone = config.clone();
+
+        // Spawn a tokio task to serve multiple connections concurrently
         tokio::spawn(async move {
             _ = handle_connection(config_clone, stream).await;
         });
     }
 }
 
-async fn handle_connection(
-    config: Arc<Config>,
-    stream: tokio::net::TcpStream,
-) -> Result<(), tokio::task::JoinError> {
+async fn handle_connection(config: Arc<Config>, stream: tokio::net::TcpStream) {
     // Use an adapter to access something implementing `tokio::io` traits as if they implement
     // `hyper::rt` IO traits.
     let io = TokioIo::new(stream);
 
-    // Spawn a tokio task to serve multiple connections concurrently
     let config_clone = config.clone();
 
     let service = service_fn(move |req| {
@@ -77,17 +78,13 @@ async fn handle_connection(
         async move { handle_request(req, config_clone).await }
     });
 
-    tokio::task::spawn(async move {
-        // Finally, we bind the incoming connection to our `hello` service
-        if let Err(err) = http1::Builder::new()
-            // `service_fn` converts our function in a `Service`
-            .serve_connection(io, service)
-            .await
-        {
-            eprintln!("Error serving connection: {:?}", err);
-        }
-    })
-    .await
+    if let Err(err) = http1::Builder::new()
+        // `service_fn` converts our function in a `Service`
+        .serve_connection(io, service)
+        .await
+    {
+        eprintln!("Error serving connection: {:?}", err);
+    }
 }
 
 async fn handle_request(
