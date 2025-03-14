@@ -82,7 +82,7 @@ impl ServerFixture {
     }
 
     pub fn wait_for_start(&mut self) {
-        self.wait_for_text("Start listening requests on");
+        self.wait_for_text("Start listening to incoming requests on");
     }
 
     #[allow(dead_code)]
