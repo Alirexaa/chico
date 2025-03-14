@@ -1,5 +1,6 @@
 use hyper::body::{Body, Bytes};
 
+#[derive(Clone, Copy)]
 pub struct MockBody {
     data: &'static [u8],
 }

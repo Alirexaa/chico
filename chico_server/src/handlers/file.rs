@@ -98,14 +98,18 @@ async fn handle_file_error(
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, io::Write};
+    use std::{
+        fs::File,
+        io::{ErrorKind, Write},
+    };
 
     use chico_file::types;
     use http::{Request, StatusCode};
     use http_body_util::BodyExt;
+    use rstest::rstest;
 
     use crate::{
-        handlers::{file::FileHandler, RequestHandler},
+        handlers::{file::FileHandler, respond::RespondHandler, RequestHandler},
         test_utils::MockBody,
     };
 
@@ -273,5 +277,29 @@ mod tests {
         )
         .unwrap();
         assert_eq!(response_body, "");
+    }
+
+    #[tokio::test]
+    #[rstest]
+    #[case(ErrorKind::NotFound, RespondHandler::not_found())]
+    #[case(ErrorKind::PermissionDenied, RespondHandler::forbidden())]
+    #[case(ErrorKind::IsADirectory, RespondHandler::forbidden())]
+    async fn test_handle_file_error(#[case] error: ErrorKind, #[case] handler: RespondHandler) {
+        use crate::handlers::file::handle_file_error;
+
+        let request_body: MockBody = MockBody::new(b"");
+        let request = Request::builder().body(request_body).unwrap();
+        let actual_response = handle_file_error(request.clone(), error).await;
+        let expected_response = handler.handle(request).await;
+        assert_eq!(expected_response.status(), actual_response.status());
+        assert_eq!(
+            expected_response
+                .boxed()
+                .collect()
+                .await
+                .unwrap()
+                .to_bytes(),
+            actual_response.boxed().collect().await.unwrap().to_bytes()
+        )
     }
 }
