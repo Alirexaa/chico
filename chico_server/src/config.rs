@@ -1,10 +1,14 @@
+use std::str::FromStr;
+
 use chico_file::{
     parse_config,
     types::{Config, VirtualHost},
 };
+use http::{uri::Scheme, Uri};
 
 pub trait ConfigExt {
     fn find_virtual_host(&self, path: &str) -> Option<&VirtualHost>;
+    fn get_ports(&self) -> Vec<u16>;
 }
 
 impl ConfigExt for Config {
@@ -12,6 +16,24 @@ impl ConfigExt for Config {
         //todo: do more advance search and pattern matching for virtual host
         let vh = self.virtual_hosts.iter().find(|&vh| vh.domain == path);
         vh
+    }
+
+    fn get_ports(&self) -> Vec<u16> {
+        self.virtual_hosts
+            .iter()
+            .map(|vh| {
+                let uri = Uri::from_str(&vh.domain).expect("Expected Valid host");
+                let port = uri.port_u16();
+                let scheme = uri.scheme();
+                port.unwrap_or_else(|| {
+                    if scheme == Some(&Scheme::HTTPS) {
+                        443
+                    } else {
+                        80
+                    }
+                })
+            })
+            .collect()
     }
 }
 
@@ -89,11 +111,17 @@ fn parse_with_validate(content: &str) -> Result<Config, String> {
 mod tests {
     use std::io::Write;
 
-    use chico_file::types::{Config, Handler, Route, VirtualHost};
+    use chico_file::{
+        parse_config,
+        types::{Config, Handler, Route, VirtualHost},
+    };
     use rstest::rstest;
     use tempfile::NamedTempFile;
 
-    use crate::{config::parse_with_validate, validate_config_file};
+    use crate::{
+        config::{parse_with_validate, ConfigExt},
+        validate_config_file,
+    };
 
     #[test]
     fn test_parse_with_validate_empty_content() {
@@ -308,5 +336,73 @@ mod tests {
                 ]
             })
         );
+    }
+
+    #[tokio::test]
+    async fn test_get_ports_when_ports_specified() {
+        let content = r#"
+        localhost:3000 {
+            route / {
+                file index.html
+            }
+        }
+        example.com:80 {
+            route / {
+                file index.html
+            }
+        }
+        http://example2.com:8080 {
+            route / {
+                file index.html
+            }
+        }
+        https://example3.com:443 {
+            route / {
+                file index.html
+            }
+        }
+        "#;
+
+        let (_, config) = parse_config(content).unwrap();
+        let ports = config.get_ports();
+        assert!(ports.iter().any(|p| *p == 3000));
+        assert!(ports.iter().any(|p| *p == 80));
+        assert!(ports.iter().any(|p| *p == 8080));
+        assert!(ports.iter().any(|p| *p == 443));
+    }
+
+    #[tokio::test]
+    #[rstest]
+    #[case(
+        r"
+    localhost {
+            route / {
+                file index.html
+            }
+        }",
+        80
+    )]
+    #[case(
+        r"
+    http://example.com {
+            route / {
+                file index.html
+            }
+        }",
+        80
+    )]
+    #[case(
+        r"
+    https://example2.com {
+            route / {
+                file index.html
+            }
+        }",
+        443
+    )]
+    async fn test_get_ports_when_ports_not_specified(#[case] content: &str, #[case] port: u16) {
+        let (_, config) = parse_config(content).unwrap();
+        let ports = config.get_ports();
+        assert!(ports.iter().any(|p| *p == port));
     }
 }

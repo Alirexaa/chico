@@ -6,12 +6,17 @@ use log::{error, info};
 use std::{convert::Infallible, net::SocketAddr, sync::Arc};
 use tokio::net::TcpListener;
 
-use crate::handlers::{select_handler, BoxBody, RequestHandler};
+use crate::{
+    config::ConfigExt,
+    handlers::{select_handler, BoxBody, RequestHandler},
+};
 
 pub async fn run_server(config: Config) {
-    let ports = [3000];
+    let ports = config.get_ports();
 
-    let socket_addresses = ports.map(|port| SocketAddr::from(([127, 0, 0, 1], port)));
+    let socket_addresses = ports
+        .into_iter()
+        .map(|port| SocketAddr::from(([127, 0, 0, 1], port)));
 
     let mut listeners = vec![];
 
