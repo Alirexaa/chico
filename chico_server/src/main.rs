@@ -10,8 +10,8 @@ mod handlers;
 mod server;
 #[cfg(test)]
 mod test_utils;
+mod uri;
 mod virtual_host;
-
 #[tokio::main]
 async fn main() {
     env_logger::builder()

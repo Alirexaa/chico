@@ -1,10 +1,11 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use chico_file::types::Config;
 use file::FileHandler;
+use http::Uri;
 use redirect::RedirectHandler;
 
-use crate::{config::ConfigExt, virtual_host::VirtualHostExt};
+use crate::{config::ConfigExt, uri::UriExt, virtual_host::VirtualHostExt};
 use hyper::{
     body::{Body, Bytes},
     Response,
@@ -27,9 +28,26 @@ pub fn select_handler(request: &hyper::Request<impl Body>, config: Arc<Config>) 
         return HandlerEnum::bad_request_host_header_not_found_respond_handler();
     }
 
-    let host = host.unwrap();
+    let host = host.unwrap().to_str();
+    if host.is_err() {
+        return HandlerEnum::bad_request_invalid_host_header_respond_handler();
+    }
 
-    let vh = &config.find_virtual_host(host.to_str().unwrap());
+    let host = host.unwrap();
+    let uri = Uri::from_str(host);
+    if uri.is_err() {
+        return HandlerEnum::bad_request_invalid_host_header_respond_handler();
+    }
+
+    let uri = uri.unwrap();
+    let host = uri.host();
+    if host.is_none() {
+        return HandlerEnum::bad_request_invalid_host_header_respond_handler();
+    }
+
+    let host = host.unwrap();
+    let port = uri.get_port();
+    let vh = &config.find_virtual_host(host, port);
 
     if vh.is_none() {
         return HandlerEnum::not_found_respond_handler();
@@ -108,6 +126,11 @@ impl HandlerEnum {
 
     pub fn bad_request_host_header_not_found_respond_handler() -> HandlerEnum {
         let body = "Host header is missing in the request.";
+        HandlerEnum::Respond(RespondHandler::bad_request_with_body(String::from(body)))
+    }
+
+    pub fn bad_request_invalid_host_header_respond_handler() -> HandlerEnum {
+        let body = "Invalid Host header.";
         HandlerEnum::Respond(RespondHandler::bad_request_with_body(String::from(body)))
     }
 }
