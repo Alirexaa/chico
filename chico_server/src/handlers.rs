@@ -2,10 +2,10 @@ use std::{str::FromStr, sync::Arc};
 
 use chico_file::types::Config;
 use file::FileHandler;
-use http::{uri::Scheme, Uri};
+use http::Uri;
 use redirect::RedirectHandler;
 
-use crate::{config::ConfigExt, virtual_host::VirtualHostExt};
+use crate::{config::ConfigExt, uri::UriExt, virtual_host::VirtualHostExt};
 use hyper::{
     body::{Body, Bytes},
     Response,
@@ -46,15 +46,7 @@ pub fn select_handler(request: &hyper::Request<impl Body>, config: Arc<Config>) 
     }
 
     let host = host.unwrap();
-    let port = uri.port_u16();
-    let scheme = uri.scheme();
-    let port = port.unwrap_or_else(|| {
-        if scheme == Some(&Scheme::HTTPS) {
-            443
-        } else {
-            80
-        }
-    });
+    let port = uri.get_port();
     let vh = &config.find_virtual_host(host, port);
 
     if vh.is_none() {
