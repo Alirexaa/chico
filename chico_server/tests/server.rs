@@ -307,11 +307,7 @@ mod serial_integration {
         let mut file = File::create(&file_path).unwrap();
         file.write_all(content.as_bytes()).unwrap();
 
-        // For this test we don't wait for start
-        // Reason following error occurred when unwrap the response
-        // thread 'tokio-runtime-worker' panicked at std\src\io\stdio.rs:1123:9:
-        //failed printing to stdout: The pipe is being closed. (os error 232)
-        // app.wait_for_start();
+        app.wait_for_start();
 
         let response = reqwest::get("http://localhost:3000").await;
 
@@ -343,14 +339,7 @@ mod serial_integration {
 
         let mut app = ServerFixture::run_app(config_file_path);
 
-        // For this test we don't wait for start
-        // Reason following error occurred when unwrap the response
-        // thread 'tokio-runtime-worker' panicked at std\src\io\stdio.rs:1123:9:
-        //failed printing to stdout: The pipe is being closed. (os error 232)
-        //thread 'serial_integration::test_file_handler_return_404' panicked at chico_server\tests\server.rs:282:33:
-        //called `Result::unwrap()` on an `Err` value: reqwest::Error { kind: Request, url: "http://localhost:3000/not-exist", source: hyper_util::client::legacy::Error(SendRequest, hyper::Error(IncompleteMessage)) }
-
-        // app.wait_for_start();
+        app.wait_for_start();
 
         let response = reqwest::get("http://localhost:3000/not-exist").await;
         app.stop_app();
