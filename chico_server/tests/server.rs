@@ -2,12 +2,15 @@ use std::{
     io::{BufRead, BufReader},
     path::Path,
     process::Stdio,
+    sync::{mpsc, Arc, Mutex},
+    thread,
 };
 
 pub(crate) struct ServerFixture {
     process: std::process::Child,
     executing_dir: String,
     exe_path: String,
+    log_receiver: Arc<Mutex<mpsc::Receiver<String>>>, // Store logs for `wait_for_text`
 }
 
 impl ServerFixture {
@@ -19,9 +22,21 @@ impl ServerFixture {
             .arg("run")
             .arg("--config")
             .arg(config_path)
-            .stdout(Stdio::piped());
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
 
-        let process = command.spawn().expect("Failed to start server");
+        let mut process = command.spawn().expect("Failed to start server");
+
+        let stdout = process.stdout.take().expect("Failed to capture stdout");
+        let stderr = process.stderr.take().expect("Failed to capture stderr");
+
+        // Create channel for log forwarding
+        let (log_sender, log_receiver) = mpsc::channel();
+        let log_receiver = Arc::new(Mutex::new(log_receiver));
+
+        // Spawn threads to log stdout and stderr
+        ServerFixture::log_output(stdout, "STDOUT", log_sender.clone());
+        ServerFixture::log_output(stderr, "STDERR", log_sender.clone());
 
         let program_path = Path::new(command.get_program());
         let exe_path = program_path.to_str().unwrap().to_string();
@@ -30,7 +45,24 @@ impl ServerFixture {
             process,
             executing_dir,
             exe_path,
+            log_receiver,
         }
+    }
+
+    fn log_output<T: std::io::Read + Send + 'static>(
+        stream: T,
+        label: &'static str,
+        sender: mpsc::Sender<String>,
+    ) {
+        let reader = BufReader::new(stream);
+        thread::spawn(move || {
+            for line in reader.lines() {
+                if let Ok(line) = line {
+                    println!("[{}] {}", label, line); // Print logs
+                    let _ = sender.send(line); // Send log to channel
+                }
+            }
+        });
     }
 
     pub fn stop_app(&mut self) {
@@ -46,18 +78,22 @@ impl ServerFixture {
     }
 
     pub fn wait_for_text(&mut self, text: &str) {
-        let stdout = self
-            .process
-            .stdout
-            .take()
-            .expect("Failed to capture stdout");
-        let reader = BufReader::new(stdout);
+        let log_receiver = self.log_receiver.lock().unwrap();
 
-        // Wait for the expected log line before proceeding
-        for line in reader.lines() {
-            let line = line.expect("Failed to read log line");
-            if line.contains(text) {
-                break;
+        loop {
+            match log_receiver.recv() {
+                Ok(line) => {
+                    if line.contains(text) {
+                        return;
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Could not wait for text. The log_receiver channel is closed. error: {}",
+                        e
+                    );
+                    return;
+                }
             }
         }
     }
@@ -271,11 +307,7 @@ mod serial_integration {
         let mut file = File::create(&file_path).unwrap();
         file.write_all(content.as_bytes()).unwrap();
 
-        // For this test we don't wait for start
-        // Reason following error occurred when unwrap the response
-        // thread 'tokio-runtime-worker' panicked at std\src\io\stdio.rs:1123:9:
-        //failed printing to stdout: The pipe is being closed. (os error 232)
-        // app.wait_for_start();
+        app.wait_for_start();
 
         let response = reqwest::get("http://localhost:3000").await;
 
@@ -307,14 +339,7 @@ mod serial_integration {
 
         let mut app = ServerFixture::run_app(config_file_path);
 
-        // For this test we don't wait for start
-        // Reason following error occurred when unwrap the response
-        // thread 'tokio-runtime-worker' panicked at std\src\io\stdio.rs:1123:9:
-        //failed printing to stdout: The pipe is being closed. (os error 232)
-        //thread 'serial_integration::test_file_handler_return_404' panicked at chico_server\tests\server.rs:282:33:
-        //called `Result::unwrap()` on an `Err` value: reqwest::Error { kind: Request, url: "http://localhost:3000/not-exist", source: hyper_util::client::legacy::Error(SendRequest, hyper::Error(IncompleteMessage)) }
-
-        // app.wait_for_start();
+        app.wait_for_start();
 
         let response = reqwest::get("http://localhost:3000/not-exist").await;
         app.stop_app();
