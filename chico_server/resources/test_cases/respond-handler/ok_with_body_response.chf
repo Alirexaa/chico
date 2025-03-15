@@ -4,9 +4,3 @@ localhost:3000 {
         respond "<h1>Example</h1>" 200
     }
 }
-
-localhost {
-    route / {
-        respond "<h1>Response from port 80</h1>" 200
-    }
-}
