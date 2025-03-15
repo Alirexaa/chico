@@ -2,7 +2,6 @@ use std::{
     io::{BufRead, BufReader},
     path::Path,
     process::Stdio,
-    time::Duration,
 };
 
 pub(crate) struct ServerFixture {
@@ -44,24 +43,6 @@ impl ServerFixture {
         if let Err(e) = self.process.wait() {
             eprintln!("Failed to wait for server process: {}", e);
         }
-
-        if let Err(e) = self.wait_for_port_release() {
-            eprintln!("Error waiting for port release: {}", e);
-        }
-    }
-
-    fn wait_for_port_release(&self) -> Result<(), String> {
-        let max_retries = 10;
-        let delay = Duration::from_millis(300);
-
-        for _ in 0..max_retries {
-            if std::net::TcpListener::bind("127.0.0.1:3000").is_ok() {
-                return Ok(()); // Port is free, server is fully stopped
-            }
-            std::thread::sleep(delay);
-        }
-
-        Err("Server did not release port 3000 within expected time".to_string())
     }
 
     pub fn wait_for_text(&mut self, text: &str) {
