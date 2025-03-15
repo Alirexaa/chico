@@ -81,12 +81,19 @@ impl ServerFixture {
         let log_receiver = self.log_receiver.lock().unwrap();
 
         loop {
-            if let Ok(line) = log_receiver.recv() {
-                if line.contains(text) {
+            match log_receiver.recv() {
+                Ok(line) => {
+                    if line.contains(text) {
+                        return;
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Could not wait for text. The log_receiver channel is closed. error: {}",
+                        e
+                    );
                     return;
                 }
-            } else {
-                return;
             }
         }
     }
