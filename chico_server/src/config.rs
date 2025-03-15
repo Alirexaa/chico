@@ -4,36 +4,26 @@ use chico_file::{
     parse_config,
     types::{Config, VirtualHost},
 };
-use http::{uri::Scheme, Uri};
+use http::Uri;
+
+use crate::virtual_host::VirtualHostExt;
 
 pub trait ConfigExt {
-    fn find_virtual_host(&self, path: &str) -> Option<&VirtualHost>;
+    fn find_virtual_host(&self, path: &str, port: u16) -> Option<&VirtualHost>;
     fn get_ports(&self) -> Vec<u16>;
 }
 
 impl ConfigExt for Config {
-    fn find_virtual_host(&self, path: &str) -> Option<&VirtualHost> {
+    fn find_virtual_host(&self, host: &str, port: u16) -> Option<&VirtualHost> {
         //todo: do more advance search and pattern matching for virtual host
-        let vh = self.virtual_hosts.iter().find(|&vh| vh.domain == path);
+        let vh = self.virtual_hosts.iter().find(|&vh| {
+            Uri::from_str(&vh.domain).unwrap().host().unwrap() == host && vh.get_port() == port
+        });
         vh
     }
 
     fn get_ports(&self) -> Vec<u16> {
-        self.virtual_hosts
-            .iter()
-            .map(|vh| {
-                let uri = Uri::from_str(&vh.domain).expect("Expected Valid host");
-                let port = uri.port_u16();
-                let scheme = uri.scheme();
-                port.unwrap_or_else(|| {
-                    if scheme == Some(&Scheme::HTTPS) {
-                        443
-                    } else {
-                        80
-                    }
-                })
-            })
-            .collect()
+        self.virtual_hosts.iter().map(|vh| vh.get_port()).collect()
     }
 }
 

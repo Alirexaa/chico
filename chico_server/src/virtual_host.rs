@@ -1,7 +1,11 @@
+use std::str::FromStr;
+
 use chico_file::types::{Route, VirtualHost};
+use http::{uri::Scheme, Uri};
 
 pub trait VirtualHostExt {
     fn find_route(&self, path: &str) -> Option<&Route>;
+    fn get_port(&self) -> u16;
 }
 
 impl VirtualHostExt for VirtualHost {
@@ -16,6 +20,18 @@ impl VirtualHostExt for VirtualHost {
             }
         });
         route
+    }
+    fn get_port(&self) -> u16 {
+        let uri = Uri::from_str(&self.domain).expect("Expected Valid host");
+        let port = uri.port_u16();
+        let scheme = uri.scheme();
+        port.unwrap_or_else(|| {
+            if scheme == Some(&Scheme::HTTPS) {
+                443
+            } else {
+                80
+            }
+        })
     }
 }
 
