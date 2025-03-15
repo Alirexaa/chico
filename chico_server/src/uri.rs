@@ -32,18 +32,16 @@ pub trait UriExt {
 
 impl UriExt for Uri {
     fn get_port(&self) -> u16 {
-        {
-            let uri = self;
-            let port = uri.port_u16();
-            let scheme = uri.scheme();
-            port.unwrap_or_else(|| {
-                if scheme == Some(&Scheme::HTTPS) {
-                    443
-                } else {
-                    80
-                }
-            })
-        }
+        let uri = self;
+        let port = uri.port_u16();
+        let scheme = uri.scheme();
+        port.unwrap_or_else(|| {
+            if scheme == Some(&Scheme::HTTPS) {
+                443
+            } else {
+                80
+            }
+        })
     }
 }
 
