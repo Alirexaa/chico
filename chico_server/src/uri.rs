@@ -1,6 +1,31 @@
 use http::{uri::Scheme, Uri};
 
+/// Extension trait for `Uri` to provide additional functionality.
 pub trait UriExt {
+    /// Retrieves the port number from the `Uri`.
+    ///
+    /// If the `Uri` does not explicitly specify a port, this method returns the default port
+    /// for the scheme: 443 for HTTPS and 80 for HTTP.
+    ///
+    /// # Returns
+    ///
+    /// * `u16` - The port number.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use chico_server::uri::UriExt;
+    /// use http::Uri;
+    ///
+    /// let uri: Uri = "https://example.com".parse().unwrap();
+    /// assert_eq!(uri.get_port(), 443);
+    ///
+    /// let uri: Uri = "http://example.com".parse().unwrap();
+    /// assert_eq!(uri.get_port(), 80);
+    ///
+    /// let uri: Uri = "http://example.com:8080".parse().unwrap();
+    /// assert_eq!(uri.get_port(), 8080);
+    /// ```
     #[allow(dead_code)]
     fn get_port(&self) -> u16;
 }
