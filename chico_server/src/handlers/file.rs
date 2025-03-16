@@ -64,37 +64,39 @@ impl RequestHandler for FileHandler {
 
         if self.is_dir {
             let ending = extract_ending_from_req_path(&_request.uri().path(), &self.route);
-            path = path.join(ending);
+            if ending.is_none() {
+                return handle_file_error(_request, ErrorKind::NotFound).await;
+            }
+            path = path.join(ending.unwrap());
         };
 
-        let file = File::open(path).await;
+        let file = File::open(&path).await;
 
         if file.is_err() {
             let err_kind = file.as_ref().err().unwrap().kind();
             return handle_file_error(_request, err_kind).await;
         }
-        let file_path = &self.path;
         let file: File = file.unwrap();
-        process_file(file_path, file)
+        process_file(path.to_str().unwrap(), file)
     }
 }
 
-fn extract_ending_from_req_path(req_path: &str, route: &String) -> String {
-    let slash_index = route.rfind("/*").unwrap();
-    let route_without_asterisk = &route[..slash_index];
+fn extract_ending_from_req_path(req_path: &str, route: &String) -> Option<String> {
+    let slash_index = route.rfind("/*")?;
+    let route_without_asterisk = &route[..=slash_index];
     let route_without_asterisk_length = route_without_asterisk.len();
-    let i = req_path.rfind(route_without_asterisk).unwrap();
-    let ending = &req_path[i + route_without_asterisk_length + 1..];
-    ending.to_string()
+    let i = req_path.find(route_without_asterisk)?;
+    let ending = &req_path[i + route_without_asterisk_length..];
+    Some(ending.to_string())
 }
 
 fn process_file(
-    file_path: &String,
+    file_name: &str,
     file: File,
 ) -> Response<http_body_util::combinators::BoxBody<bytes::Bytes, std::io::Error>> {
     let mut builder = Response::builder().status(StatusCode::OK);
 
-    let content_type = MIME_DICT.get_content_type(file_path);
+    let content_type = MIME_DICT.get_content_type(file_name);
     if content_type.is_some() {
         builder = builder.header(http::header::CONTENT_TYPE, content_type.unwrap());
     }
@@ -177,6 +179,65 @@ mod tests {
                 .to_str()
                 .unwrap(),
             "text/html"
+        );
+
+        let response_body = String::from_utf8(
+            response
+                .boxed()
+                .collect()
+                .await
+                .unwrap()
+                .to_bytes()
+                .to_vec(),
+        )
+        .unwrap();
+        assert_eq!(response_body, content);
+
+        // Ignore the result of removing file
+        _ = std::fs::remove_file(file_path);
+    }
+
+    #[tokio::test]
+    async fn test_file_handler_return_ok_relative_path_and_dynamic_route() {
+        // For relative file we try to lookup file in directory or sub-directory of exe location
+        // Create file in executing directory
+        let exe_path = std::env::current_exe().unwrap();
+        let cd = exe_path.parent().unwrap();
+        let dir = cd.join("srv/dir1/dir2");
+        let file_path = &dir.join("hello.txt");
+
+        let content = r"Hello world!!!";
+        println!("{:?}", file_path);
+        std::fs::create_dir_all(dir).expect("Expected to create directories");
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+
+        // This is file handler for following config
+        // localhost {
+        //     route /* {
+        //         file srv/
+        //     }
+        // }
+
+        let file_handler = FileHandler::new("srv/".to_string(), "/*".to_string());
+
+        let request_body: MockBody = MockBody::new(b"");
+        let request = Request::builder()
+            .uri("http://localhost/dir1/dir2/hello.txt")
+            .body(request_body)
+            .unwrap();
+
+        let response = file_handler.handle(request).await;
+
+        assert_eq!(&response.status(), &StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(http::header::CONTENT_TYPE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "text/plain"
         );
 
         let response_body = String::from_utf8(
@@ -321,6 +382,7 @@ mod tests {
     }
 
     #[rstest]
+    #[case("/*", "/downloads/dir1/file.txt", "downloads/dir1/file.txt")]
     #[case("/downloads/*", "/downloads/dir1/file.txt", "dir1/file.txt")]
     #[case("/downloads/*", "/downloads/dir1/dir2/file.txt", "dir1/dir2/file.txt")]
     #[case(
@@ -340,6 +402,6 @@ mod tests {
         #[case] ending: &str,
     ) {
         let result = extract_ending_from_req_path(req_path, &route.to_string());
-        assert_eq!(ending.to_string(), result);
+        assert_eq!(ending.to_string(), result.unwrap());
     }
 }
