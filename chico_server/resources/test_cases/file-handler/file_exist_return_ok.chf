@@ -2,4 +2,8 @@ localhost:3000 {
     route / {
         file index.html
     }
+    
+    route /downloads/* {
+        file srv/downloads/
+    }
 }

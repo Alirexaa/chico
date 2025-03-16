@@ -64,7 +64,9 @@ pub fn select_handler(request: &hyper::Request<impl Body>, config: Arc<Config>) 
     let route = route.unwrap();
 
     let handler: HandlerEnum = match &route.handler {
-        chico_file::types::Handler::File(path) => HandlerEnum::File(FileHandler::new(path.clone())),
+        chico_file::types::Handler::File(path) => {
+            HandlerEnum::File(FileHandler::new(path.clone(), route.path.clone()))
+        }
         chico_file::types::Handler::Proxy(_) => todo!(),
         chico_file::types::Handler::Dir(_) => todo!(),
         chico_file::types::Handler::Browse(_) => todo!(),
