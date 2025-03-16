@@ -81,7 +81,7 @@ impl RequestHandler for FileHandler {
     }
 }
 
-fn extract_ending_from_req_path(req_path: &str, route: &String) -> Option<String> {
+fn extract_ending_from_req_path(req_path: &str, route: &str) -> Option<String> {
     let slash_index = route.rfind("/*")?;
     let route_without_asterisk = &route[..=slash_index];
     let route_without_asterisk_length = route_without_asterisk.len();
@@ -401,7 +401,7 @@ mod tests {
         #[case] req_path: &str,
         #[case] ending: &str,
     ) {
-        let result = extract_ending_from_req_path(req_path, &route.to_string());
+        let result = extract_ending_from_req_path(req_path, &route);
         assert_eq!(ending.to_string(), result.unwrap());
     }
 }

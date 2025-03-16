@@ -331,6 +331,46 @@ mod serial_integration {
     }
 
     #[tokio::test]
+    async fn test_file_handler_return_ok_dynamic_route() {
+        let config_file_path =
+            Path::new("resources/test_cases/file-handler/file_exist_return_ok.chf");
+        assert!(config_file_path.exists());
+
+        let mut app = ServerFixture::run_app(config_file_path);
+
+        let dir = Path::new(app.get_executing_dir()).join("srv/downloads");
+        let file_path = &dir.join("hello.txt");
+
+        let content = r"Hello World!!!";
+
+        std::fs::create_dir_all(dir).expect("Expected to create directories");
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+
+        app.wait_for_start();
+
+        let response = reqwest::get("http://localhost:3000/downloads/hello.txt").await;
+
+        // Cleanup resources before assertion
+        app.stop_app();
+        _ = std::fs::remove_file(file_path);
+
+        let response = response.unwrap();
+        assert_eq!(&response.status(), &StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(http::header::CONTENT_TYPE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "text/plain"
+        );
+        assert_eq!(&response.status(), &StatusCode::OK);
+        assert_eq!(&response.text().await.unwrap(), content);
+    }
+
+    #[tokio::test]
     // #[ignore = "reason"]
     async fn test_file_handler_return_404() {
         let config_file_path =
