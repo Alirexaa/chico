@@ -18,13 +18,15 @@ static MIME_DICT: std::sync::LazyLock<mimee::MimeDict> =
 pub struct FileHandler {
     pub path: String,
     pub is_dir: bool,
+    pub route: String,
 }
 
 impl FileHandler {
-    pub fn new(path: String) -> FileHandler {
+    pub fn new(path: String, route: String) -> FileHandler {
         FileHandler {
             is_dir: path.ends_with("/"),
             path,
+            route,
         }
     }
 }
@@ -34,8 +36,7 @@ impl RequestHandler for FileHandler {
         &self,
         _request: hyper::Request<impl hyper::body::Body>,
     ) -> http::Response<BoxBody> {
-        let file_path = &self.path;
-        let mut path = PathBuf::from(file_path);
+        let mut path = PathBuf::from(&self.path);
 
         if !path.is_absolute() {
             let exe_path = env::current_exe().unwrap();
@@ -53,11 +54,18 @@ impl RequestHandler for FileHandler {
             }
             let metadata = metadata.unwrap();
             if metadata.is_dir() {
-                return handle_file_error(_request, ErrorKind::IsADirectory).await;
+                if !self.is_dir {
+                    return handle_file_error(_request, ErrorKind::IsADirectory).await;
+                }
             }
         } else {
             return handle_file_error(_request, ErrorKind::NotFound).await;
         }
+
+        if self.is_dir {
+            let ending = extract_ending_from_req_path(&_request.uri().path(), &self.route);
+            path = path.join(ending);
+        };
 
         let file = File::open(path).await;
 
@@ -65,25 +73,40 @@ impl RequestHandler for FileHandler {
             let err_kind = file.as_ref().err().unwrap().kind();
             return handle_file_error(_request, err_kind).await;
         }
-
+        let file_path = &self.path;
         let file: File = file.unwrap();
-
-        let mut builder = Response::builder().status(StatusCode::OK);
-
-        let content_type = MIME_DICT.get_content_type(file_path);
-        if content_type.is_some() {
-            builder = builder.header(http::header::CONTENT_TYPE, content_type.unwrap());
-        }
-
-        let reader_stream = ReaderStream::new(file);
-
-        // Convert to http_body_util::BoxBody
-        let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
-        let boxed_body = stream_body.boxed();
-
-        let response = builder.body(boxed_body).unwrap();
-        response
+        process_file(file_path, file)
     }
+}
+
+fn extract_ending_from_req_path(req_path: &str, route: &String) -> String {
+    let slash_index = route.rfind("/*").unwrap();
+    let route_without_asterisk = &route[..slash_index];
+    let route_without_asterisk_length = route_without_asterisk.len();
+    let i = req_path.rfind(route_without_asterisk).unwrap();
+    let ending = &req_path[i + route_without_asterisk_length + 1..];
+    ending.to_string()
+}
+
+fn process_file(
+    file_path: &String,
+    file: File,
+) -> Response<http_body_util::combinators::BoxBody<bytes::Bytes, std::io::Error>> {
+    let mut builder = Response::builder().status(StatusCode::OK);
+
+    let content_type = MIME_DICT.get_content_type(file_path);
+    if content_type.is_some() {
+        builder = builder.header(http::header::CONTENT_TYPE, content_type.unwrap());
+    }
+
+    let reader_stream = ReaderStream::new(file);
+
+    // Convert to http_body_util::BoxBody
+    let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
+    let boxed_body = stream_body.boxed();
+
+    let response = builder.body(boxed_body).unwrap();
+    response
 }
 
 async fn handle_file_error(
@@ -115,6 +138,8 @@ mod tests {
         test_utils::MockBody,
     };
 
+    use super::extract_ending_from_req_path;
+
     #[tokio::test]
     async fn test_file_handler_return_ok_relative_path() {
         // For relative file we try to lookup file in directory or sub-directory of exe location
@@ -136,7 +161,7 @@ mod tests {
         let mut file = File::create(&file_path).unwrap();
         file.write_all(content.as_bytes()).unwrap();
 
-        let file_handler = FileHandler::new("index.html".to_string());
+        let file_handler = FileHandler::new("index.html".to_string(), "/".to_string());
 
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
@@ -189,7 +214,8 @@ mod tests {
         let mut file = File::create(&file_path).unwrap();
         file.write_all(content.as_bytes()).unwrap();
 
-        let file_handler = FileHandler::new(file_path.to_str().unwrap().to_string());
+        let file_handler =
+            FileHandler::new(file_path.to_str().unwrap().to_string(), "/".to_string());
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
@@ -224,7 +250,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_file_handler_return_404() {
-        let file_handler = FileHandler::new("not-exist-index.html".to_string());
+        let file_handler = FileHandler::new("not-exist-index.html".to_string(), "/".to_string());
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
@@ -250,7 +276,7 @@ mod tests {
         let cd = exe_path.parent().unwrap();
 
         // Try to reading content of directory as file case PermissionDenied by OS
-        let file_handler = FileHandler::new(cd.to_str().unwrap().to_string());
+        let file_handler = FileHandler::new(cd.to_str().unwrap().to_string(), "/".to_string());
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
@@ -292,5 +318,28 @@ mod tests {
                 .to_bytes(),
             actual_response.boxed().collect().await.unwrap().to_bytes()
         )
+    }
+
+    #[rstest]
+    #[case("/downloads/*", "/downloads/dir1/file.txt", "dir1/file.txt")]
+    #[case("/downloads/*", "/downloads/dir1/dir2/file.txt", "dir1/dir2/file.txt")]
+    #[case(
+        "/downloads/v1/*",
+        "/downloads/v1/dir1/dir2/file.txt",
+        "dir1/dir2/file.txt"
+    )]
+    #[case("/downloads/v1/*", "/downloads/v1/فایل.txt", "فایل.txt")]
+    #[case(
+        "/downloads/v1/*",
+        "/downloads/v1/Löwe 老虎 Léopard Gepardi.txt",
+        "Löwe 老虎 Léopard Gepardi.txt"
+    )]
+    fn test_extract_ending_from_req_path(
+        #[case] route: &str,
+        #[case] req_path: &str,
+        #[case] ending: &str,
+    ) {
+        let result = extract_ending_from_req_path(req_path, &route.to_string());
+        assert_eq!(ending.to_string(), result);
     }
 }
