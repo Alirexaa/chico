@@ -1,6 +1,5 @@
 use std::{env, io::ErrorKind, path::PathBuf};
 
-use chico_file::types;
 use futures_util::TryStreamExt;
 use http::{Response, StatusCode};
 use http_body_util::{BodyExt, StreamBody};
@@ -17,7 +16,17 @@ static MIME_DICT: std::sync::LazyLock<mimee::MimeDict> =
 
 #[derive(PartialEq, Debug)]
 pub struct FileHandler {
-    pub handler: types::Handler,
+    pub path: String,
+    pub is_dir: bool,
+}
+
+impl FileHandler {
+    pub fn new(path: String) -> FileHandler {
+        FileHandler {
+            is_dir: path.ends_with("/"),
+            path,
+        }
+    }
 }
 
 impl RequestHandler for FileHandler {
@@ -25,61 +34,55 @@ impl RequestHandler for FileHandler {
         &self,
         _request: hyper::Request<impl hyper::body::Body>,
     ) -> http::Response<BoxBody> {
-        if let types::Handler::File(file_path) = &self.handler {
-            let mut path = PathBuf::from(file_path);
+        let file_path = &self.path;
+        let mut path = PathBuf::from(file_path);
 
-            if !path.is_absolute() {
-                let exe_path = env::current_exe().unwrap();
-                let cd = exe_path.parent().unwrap();
-                path = cd.join(path);
-            };
+        if !path.is_absolute() {
+            let exe_path = env::current_exe().unwrap();
+            let cd = exe_path.parent().unwrap();
+            path = cd.join(path);
+        };
 
-            let path_exist = tokio::fs::try_exists(&path).await;
+        let path_exist = tokio::fs::try_exists(&path).await;
 
-            if let Ok(true) = path_exist {
-                let metadata = tokio::fs::metadata(&path).await;
-                if metadata.is_err() {
-                    let err_kind = metadata.as_ref().err().unwrap().kind();
-                    return handle_file_error(_request, err_kind).await;
-                }
-                let metadata = metadata.unwrap();
-                if metadata.is_dir() {
-                    return handle_file_error(_request, ErrorKind::IsADirectory).await;
-                }
-            } else {
-                return handle_file_error(_request, ErrorKind::NotFound).await;
-            }
-
-            let file = File::open(path).await;
-
-            if file.is_err() {
-                let err_kind = file.as_ref().err().unwrap().kind();
+        if let Ok(true) = path_exist {
+            let metadata = tokio::fs::metadata(&path).await;
+            if metadata.is_err() {
+                let err_kind = metadata.as_ref().err().unwrap().kind();
                 return handle_file_error(_request, err_kind).await;
             }
-
-            let file: File = file.unwrap();
-
-            let mut builder = Response::builder().status(StatusCode::OK);
-
-            let content_type = MIME_DICT.get_content_type(file_path);
-            if content_type.is_some() {
-                builder = builder.header(http::header::CONTENT_TYPE, content_type.unwrap());
+            let metadata = metadata.unwrap();
+            if metadata.is_dir() {
+                return handle_file_error(_request, ErrorKind::IsADirectory).await;
             }
-
-            let reader_stream = ReaderStream::new(file);
-
-            // Convert to http_body_util::BoxBody
-            let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
-            let boxed_body = stream_body.boxed();
-
-            let response = builder.body(boxed_body).unwrap();
-            response
         } else {
-            unimplemented!(
-                "Only file handler is supported. Given handler was {}",
-                self.handler.type_name()
-            )
+            return handle_file_error(_request, ErrorKind::NotFound).await;
         }
+
+        let file = File::open(path).await;
+
+        if file.is_err() {
+            let err_kind = file.as_ref().err().unwrap().kind();
+            return handle_file_error(_request, err_kind).await;
+        }
+
+        let file: File = file.unwrap();
+
+        let mut builder = Response::builder().status(StatusCode::OK);
+
+        let content_type = MIME_DICT.get_content_type(file_path);
+        if content_type.is_some() {
+            builder = builder.header(http::header::CONTENT_TYPE, content_type.unwrap());
+        }
+
+        let reader_stream = ReaderStream::new(file);
+
+        // Convert to http_body_util::BoxBody
+        let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
+        let boxed_body = stream_body.boxed();
+
+        let response = builder.body(boxed_body).unwrap();
+        response
     }
 }
 
@@ -103,7 +106,6 @@ mod tests {
         io::{ErrorKind, Write},
     };
 
-    use chico_file::types;
     use http::{Request, StatusCode};
     use http_body_util::BodyExt;
     use rstest::rstest;
@@ -134,9 +136,7 @@ mod tests {
         let mut file = File::create(&file_path).unwrap();
         file.write_all(content.as_bytes()).unwrap();
 
-        let file_handler = FileHandler {
-            handler: types::Handler::File("index.html".to_string()),
-        };
+        let file_handler = FileHandler::new("index.html".to_string());
 
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
@@ -189,10 +189,7 @@ mod tests {
         let mut file = File::create(&file_path).unwrap();
         file.write_all(content.as_bytes()).unwrap();
 
-        let file_handler = FileHandler {
-            handler: types::Handler::File(file_path.to_str().unwrap().to_string()),
-        };
-
+        let file_handler = FileHandler::new(file_path.to_str().unwrap().to_string());
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
@@ -227,10 +224,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_file_handler_return_404() {
-        let file_handler = FileHandler {
-            handler: types::Handler::File("not-exist-index.html".to_string()),
-        };
-
+        let file_handler = FileHandler::new("not-exist-index.html".to_string());
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
@@ -256,10 +250,7 @@ mod tests {
         let cd = exe_path.parent().unwrap();
 
         // Try to reading content of directory as file case PermissionDenied by OS
-        let file_handler = FileHandler {
-            handler: types::Handler::File(cd.to_str().unwrap().to_string()),
-        };
-
+        let file_handler = FileHandler::new(cd.to_str().unwrap().to_string());
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
