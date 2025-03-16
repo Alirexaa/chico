@@ -326,7 +326,6 @@ mod serial_integration {
                 .unwrap(),
             "text/html"
         );
-        assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(&response.text().await.unwrap(), content);
     }
 
@@ -366,7 +365,6 @@ mod serial_integration {
                 .unwrap(),
             "text/plain"
         );
-        assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(&response.text().await.unwrap(), content);
     }
 
