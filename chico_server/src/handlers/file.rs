@@ -1,10 +1,17 @@
-use std::{env, io::ErrorKind, path::PathBuf};
+use std::{
+    env,
+    io::{ErrorKind, SeekFrom},
+    path::PathBuf,
+};
 
 use futures_util::TryStreamExt;
-use http::{Response, StatusCode};
+use http::{Method, Response, StatusCode};
 use http_body_util::{BodyExt, StreamBody};
 use hyper::body::Frame;
-use tokio::fs::File;
+use tokio::{
+    fs::File,
+    io::{AsyncReadExt, AsyncSeekExt},
+};
 use tokio_util::io::ReaderStream;
 
 use crate::handlers::respond::RespondHandler;
@@ -77,7 +84,7 @@ impl RequestHandler for FileHandler {
             return handle_file_error(_request, err_kind).await;
         }
         let file: File = file.unwrap();
-        process_file(path.to_str().unwrap(), file)
+        process_file(_request, path.to_str().unwrap(), file).await
     }
 }
 
@@ -90,25 +97,74 @@ fn extract_ending_from_req_path(req_path: &str, route: &str) -> Option<String> {
     Some(ending.to_string())
 }
 
-fn process_file(
+async fn process_file(
+    _request: hyper::Request<impl hyper::body::Body>,
     file_name: &str,
-    file: File,
+    mut file: File,
 ) -> Response<http_body_util::combinators::BoxBody<bytes::Bytes, std::io::Error>> {
-    let mut builder = Response::builder().status(StatusCode::OK);
+    let mut builder = Response::builder();
 
     let content_type = MIME_DICT.get_content_type(file_name);
     if content_type.is_some() {
         builder = builder.header(http::header::CONTENT_TYPE, content_type.unwrap());
     }
+    if *_request.method() == Method::HEAD {
+        let file_size = file.metadata().await.unwrap().len();
 
-    let reader_stream = ReaderStream::new(file);
+        builder = builder.header(http::header::CONTENT_LENGTH, file_size);
+    }
+    builder = builder.header(http::header::ACCEPT_RANGES, "bytes");
 
-    // Convert to http_body_util::BoxBody
-    let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
-    let boxed_body = stream_body.boxed();
+    let mut accept_ranges = false;
+    let range_header = _request.headers().get(http::header::RANGE);
+    if range_header.is_some() {
+        accept_ranges = true;
+    }
 
-    let response = builder.body(boxed_body).unwrap();
-    response
+    if accept_ranges {
+        let range = range_header.unwrap().to_str().unwrap();
+        let file_size = file.metadata().await.unwrap().len();
+        let range = parse_range(range, file_size);
+
+        if range.is_none() {
+            return Response::builder()
+                .status(StatusCode::RANGE_NOT_SATISFIABLE)
+                .header(
+                    http::header::CONTENT_RANGE,
+                    format!("bytes */{}", file_size),
+                )
+                .body(super::full(""))
+                .unwrap();
+        }
+
+        let range = range.unwrap();
+        let (start, end) = range[0];
+        let content_length = end - start + 1;
+
+        // Seek to the starting position (byte 0)
+        file.seek(SeekFrom::Start(start)).await.unwrap();
+
+        let stream = ReaderStream::new(file.take(content_length));
+        let stream_body = StreamBody::new(stream.map_ok(Frame::data));
+        let boxed_body = stream_body.boxed();
+        let response = builder
+            .status(StatusCode::PARTIAL_CONTENT)
+            .header(http::header::CONTENT_LENGTH, content_length)
+            .header(
+                http::header::CONTENT_RANGE,
+                format!("bytes {}-{}/{}", start, end, file_size),
+            )
+            .body(boxed_body)
+            .unwrap();
+        response
+    } else {
+        let reader_stream = ReaderStream::new(file);
+        let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
+        let boxed_body = stream_body.boxed();
+
+        let response = builder.status(StatusCode::OK).body(boxed_body).unwrap();
+        response
+    }
 }
 
 async fn handle_file_error(
@@ -122,6 +178,47 @@ async fn handle_file_error(
         _ => RespondHandler::internal_server_error(),
     };
     return handler.handle(_request).await;
+}
+
+/// Helper function to parse Range header
+/// Returns None if the range is invalid
+#[allow(dead_code)]
+fn parse_range(range: &str, file_size: u64) -> Option<Vec<(u64, u64)>> {
+    if !range.starts_with("bytes=") {
+        return None;
+    }
+
+    let range = &range[6..]; // Strip "bytes="
+    let mut ranges = Vec::new();
+
+    for part in range.split(',') {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+
+        if let Some((start, end)) = part.split_once('-') {
+            match (start.parse::<u64>().ok(), end.parse::<u64>().ok()) {
+                (Some(start), Some(end)) if start <= end && end < file_size => {
+                    ranges.push((start, end));
+                }
+                (Some(start), None) if start < file_size => {
+                    ranges.push((start, file_size - 1)); // Start at `start`, go to end
+                }
+                (None, Some(end)) if end > 0 => {
+                    let start = file_size.saturating_sub(end); // Last `end` bytes
+                    ranges.push((start, file_size - 1));
+                }
+                _ => return None, // Invalid range
+            }
+        }
+    }
+
+    if ranges.is_empty() {
+        None
+    } else {
+        Some(ranges)
+    }
 }
 
 #[cfg(test)]

@@ -69,6 +69,11 @@ impl RespondHandler {
     pub fn internal_server_error_with_body(body: String) -> RespondHandler {
         RespondHandler::new(500, Some(body))
     }
+
+    #[allow(dead_code)]
+    pub fn range_not_satisfiable() -> RespondHandler {
+        RespondHandler::new(416, None)
+    }
 }
 
 impl RequestHandler for RespondHandler {
