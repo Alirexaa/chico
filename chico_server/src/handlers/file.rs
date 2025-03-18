@@ -1,5 +1,6 @@
 use std::{
     env,
+    fs::Metadata,
     io::{ErrorKind, SeekFrom},
     path::PathBuf,
 };
@@ -53,20 +54,19 @@ impl RequestHandler for FileHandler {
 
         let path_exist = tokio::fs::try_exists(&path).await;
 
-        if let Ok(true) = path_exist {
-            let metadata = tokio::fs::metadata(&path).await;
-            if metadata.is_err() {
-                let err_kind = metadata.as_ref().err().unwrap().kind();
-                return handle_file_error(_request, err_kind).await;
-            }
-            let metadata = metadata.unwrap();
-            if metadata.is_dir() {
-                if !self.is_dir {
-                    return handle_file_error(_request, ErrorKind::IsADirectory).await;
-                }
-            }
-        } else {
+        if !path_exist.is_ok_and(|x| x) {
             return handle_file_error(_request, ErrorKind::NotFound).await;
+        }
+
+        let metadata = tokio::fs::metadata(&path).await;
+        if metadata.is_err() {
+            let err_kind = metadata.as_ref().err().unwrap().kind();
+            return handle_file_error(_request, err_kind).await;
+        }
+
+        let metadata = &metadata.unwrap();
+        if metadata.is_dir() && !self.is_dir {
+            return handle_file_error(_request, ErrorKind::IsADirectory).await;
         }
 
         if self.is_dir {
@@ -84,7 +84,7 @@ impl RequestHandler for FileHandler {
             return handle_file_error(_request, err_kind).await;
         }
         let file: File = file.unwrap();
-        process_file(_request, path.to_str().unwrap(), file).await
+        process_file(_request, path.to_str().unwrap(), file, metadata).await
     }
 }
 
@@ -98,35 +98,40 @@ fn extract_ending_from_req_path(req_path: &str, route: &str) -> Option<String> {
 }
 
 async fn process_file(
-    _request: hyper::Request<impl hyper::body::Body>,
+    request: hyper::Request<impl hyper::body::Body>,
     file_name: &str,
     mut file: File,
+    metadata: &Metadata,
 ) -> Response<http_body_util::combinators::BoxBody<bytes::Bytes, std::io::Error>> {
     let mut builder = Response::builder();
 
     let content_type = MIME_DICT.get_content_type(file_name);
+    let file_size = metadata.len();
+
     if content_type.is_some() {
         builder = builder.header(http::header::CONTENT_TYPE, content_type.unwrap());
     }
-    if *_request.method() == Method::HEAD {
-        let file_size = file.metadata().await.unwrap().len();
 
+    if *request.method() == Method::HEAD {
         builder = builder.header(http::header::CONTENT_LENGTH, file_size);
     }
     builder = builder.header(http::header::ACCEPT_RANGES, "bytes");
 
-    let mut accept_ranges = false;
-    let range_header = _request.headers().get(http::header::RANGE);
+    let range_header = request.headers().get(http::header::RANGE);
+    let mut range = None;
     if range_header.is_some() {
-        accept_ranges = true;
+        match range_header.unwrap().to_str() {
+            Ok(data) => match parse_range(data, file_size) {
+                Some(r) => range = Some(Ok(r)),
+                None => range = Some(Err("Invalid range")),
+            },
+            Err(_) => range = Some(Err("Invalid Header")),
+        }
     }
 
-    if accept_ranges {
-        let range = range_header.unwrap().to_str().unwrap();
-        let file_size = file.metadata().await.unwrap().len();
-        let range = parse_range(range, file_size);
-
-        if range.is_none() {
+    if range.is_some() {
+        let range = range.unwrap();
+        if range.is_err() {
             return Response::builder()
                 .status(StatusCode::RANGE_NOT_SATISFIABLE)
                 .header(
@@ -141,7 +146,6 @@ async fn process_file(
         let (start, end) = range[0];
         let content_length = end - start + 1;
 
-        // Seek to the starting position (byte 0)
         file.seek(SeekFrom::Start(start)).await.unwrap();
 
         let stream = ReaderStream::new(file.take(content_length));
