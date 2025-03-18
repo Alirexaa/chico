@@ -153,8 +153,9 @@ async fn process_file(
         let (start, end) = range[0];
         let content_length = end - start + 1;
 
-        file.seek(SeekFrom::Start(start)).await.unwrap();
-
+        if let Err(e) = file.seek(SeekFrom::Start(start)).await {
+            return handle_file_error(request, e.kind()).await;
+        };
         let stream = ReaderStream::new(file.take(content_length));
         let stream_body = StreamBody::new(stream.map_ok(Frame::data));
         let boxed_body = stream_body.boxed();
