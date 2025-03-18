@@ -83,7 +83,14 @@ impl RequestHandler for FileHandler {
             let err_kind = file.as_ref().err().unwrap().kind();
             return handle_file_error(_request, err_kind).await;
         }
+
+        let metadata = tokio::fs::metadata(&path).await;
+        if metadata.is_err() {
+            let err_kind = metadata.as_ref().err().unwrap().kind();
+            return handle_file_error(_request, err_kind).await;
+        }
         let file: File = file.unwrap();
+        let metadata = &metadata.unwrap();
         process_file(_request, path.to_str().unwrap(), file, metadata).await
     }
 }
