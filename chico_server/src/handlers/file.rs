@@ -246,7 +246,11 @@ mod tests {
     use tempfile::NamedTempFile;
 
     use crate::{
-        handlers::{file::FileHandler, respond::RespondHandler, RequestHandler},
+        handlers::{
+            file::{parse_range, FileHandler},
+            respond::RespondHandler,
+            RequestHandler,
+        },
         test_utils::MockBody,
     };
 
@@ -590,5 +594,75 @@ mod tests {
     ) {
         let result = extract_ending_from_req_path(req_path, &route);
         assert_eq!(ending.to_string(), result.unwrap());
+    }
+
+    #[test]
+    fn test_parse_range_valid_ranges() {
+        let file_size = 100;
+
+        // Single valid range
+        let range = "bytes=0-49";
+        let result = parse_range(range, file_size);
+        assert_eq!(result, Some(vec![(0, 49)]));
+
+        // Multiple valid ranges
+        let range = "bytes=0-49,50-99";
+        let result = parse_range(range, file_size);
+        assert_eq!(result, Some(vec![(0, 49), (50, 99)]));
+
+        // Open-ended range (start only)
+        let range = "bytes=50-";
+        let result = parse_range(range, file_size);
+        assert_eq!(result, Some(vec![(50, 99)]));
+
+        // Open-ended range (end only)
+        let range = "bytes=-10";
+        let result = parse_range(range, file_size);
+        assert_eq!(result, Some(vec![(90, 99)]));
+    }
+
+    #[test]
+    fn test_parse_range_invalid_ranges() {
+        let file_size = 100;
+
+        // Invalid range format
+        let range = "bytes=abc-def";
+        let result = parse_range(range, file_size);
+        assert_eq!(result, None);
+
+        // Start greater than end
+        let range = "bytes=50-40";
+        let result = parse_range(range, file_size);
+        assert_eq!(result, None);
+
+        // End exceeds file size
+        let range = "bytes=90-110";
+        let result = parse_range(range, file_size);
+        assert_eq!(result, None);
+
+        // Missing "bytes=" prefix
+        let range = "0-49";
+        let result = parse_range(range, file_size);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_range_edge_cases() {
+        let file_size = 100;
+
+        // Empty range
+        let range = "bytes=";
+        let result = parse_range(range, file_size);
+        assert_eq!(result, None);
+
+        // Range with whitespace
+        let range = "bytes= 0-49 , 50-99 ";
+        let result = parse_range(range, file_size);
+        assert_eq!(result, Some(vec![(0, 49), (50, 99)]));
+
+        // Range covering the entire file
+        let range = "bytes=0-99";
+        let result = parse_range(range, file_size);
+        assert_eq!(result, Some(vec![(0, 99)]));
     }
 }
