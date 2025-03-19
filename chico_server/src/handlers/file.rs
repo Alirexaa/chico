@@ -243,6 +243,7 @@ mod tests {
     use http::{Request, StatusCode};
     use http_body_util::BodyExt;
     use rstest::rstest;
+    use tempfile::NamedTempFile;
 
     use crate::{
         handlers::{file::FileHandler, respond::RespondHandler, RequestHandler},
@@ -304,6 +305,74 @@ mod tests {
 
         // Ignore the result of removing file
         _ = std::fs::remove_file(file_path);
+    }
+
+    #[tokio::test]
+    async fn test_file_handler_head_request_set_content_length() {
+        let content = r"<!DOCTYPE html>  
+        <html>  
+        <head>  
+            <title>Hello World</title>  
+        </head>  
+        <body>  
+            <h1>Hello World</h1>  
+        </body>  
+        </html>";
+
+        let mut temp_file = NamedTempFile::with_suffix(".html").unwrap();
+        temp_file
+            .write_all(content.as_bytes())
+            .expect("Expected to write content");
+
+        let file_path = temp_file.path().to_str().unwrap();
+
+        let file_handler = FileHandler::new(file_path.to_string(), "/".to_string());
+
+        let file_size = temp_file
+            .as_file()
+            .metadata()
+            .expect("Expected to get metadata")
+            .len();
+
+        let request_body: MockBody = MockBody::new(b"");
+        let request = Request::builder()
+            .method(http::method::Method::HEAD)
+            .body(request_body)
+            .unwrap();
+
+        let response = file_handler.handle(request).await;
+
+        assert_eq!(&response.status(), &StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(http::header::CONTENT_TYPE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "text/html"
+        );
+        assert_eq!(
+            response
+                .headers()
+                .get(http::header::CONTENT_LENGTH)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            file_size.to_string()
+        );
+
+        let response_body = String::from_utf8(
+            response
+                .boxed()
+                .collect()
+                .await
+                .unwrap()
+                .to_bytes()
+                .to_vec(),
+        )
+        .unwrap();
+        assert_eq!(response_body, content);
     }
 
     #[tokio::test]
