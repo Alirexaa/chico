@@ -369,7 +369,6 @@ mod serial_integration {
     }
 
     #[tokio::test]
-    // #[ignore = "reason"]
     async fn test_file_handler_return_404() {
         let config_file_path =
             Path::new("resources/test_cases/file-handler/file_not_exist_return_404.chf");
@@ -385,5 +384,150 @@ mod serial_integration {
         let response = response.unwrap();
         assert_eq!(&response.status(), &StatusCode::NOT_FOUND);
         assert_eq!(&response.text().await.unwrap(), "");
+    }
+
+    #[tokio::test]
+    async fn test_file_handler_head_request() {
+        let config_file_path =
+            Path::new("resources/test_cases/file-handler/file_exist_return_ok.chf");
+        assert!(config_file_path.exists());
+
+        let mut app = ServerFixture::run_app(config_file_path);
+
+        let file_path = Path::new(app.get_executing_dir()).join("index.html");
+
+        let content = r"<!DOCTYPE html>  
+    <html>  
+    <head>  
+        <title>Hello World</title>  
+    </head>  
+    <body>  
+        <h1>Hello World</h1>  
+    </body>  
+    </html>";
+
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(content.as_bytes()).unwrap();
+
+        app.wait_for_start();
+
+        let response = reqwest::Client::new()
+            .head("http://localhost:3000")
+            .send()
+            .await;
+
+        // Cleanup resources before assertion
+        app.stop_app();
+        _ = std::fs::remove_file(file_path);
+
+        let response = response.unwrap();
+        assert_eq!(&response.status(), &StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(http::header::CONTENT_TYPE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "text/html"
+        );
+        assert_eq!(
+            response
+                .headers()
+                .get(http::header::CONTENT_LENGTH)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            content.len().to_string()
+        );
+        assert_eq!(
+            response
+                .headers()
+                .get(http::header::ACCEPT_RANGES)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "bytes"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_file_handler_valid_range_request() {
+        let config_file_path =
+            Path::new("resources/test_cases/file-handler/file_exist_return_ok.chf");
+        assert!(config_file_path.exists());
+
+        let mut app = ServerFixture::run_app(config_file_path);
+
+        let file_path = Path::new(app.get_executing_dir()).join("test.txt");
+
+        let content = b"Hello, this is a test file content!";
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(content).unwrap();
+
+        app.wait_for_start();
+
+        let response = reqwest::Client::new()
+            .get("http://localhost:3000/test.txt")
+            .header(http::header::RANGE, "bytes=0-4")
+            .send()
+            .await;
+
+        // Cleanup resources before assertion
+        app.stop_app();
+        _ = std::fs::remove_file(file_path);
+
+        let response = response.unwrap();
+        assert_eq!(&response.status(), &StatusCode::PARTIAL_CONTENT);
+        assert_eq!(
+            response
+                .headers()
+                .get(http::header::CONTENT_RANGE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "bytes 0-4/35"
+        );
+        assert_eq!(response.text().await.unwrap(), "Hello");
+    }
+
+    #[tokio::test]
+    async fn test_file_handler_invalid_range_request() {
+        let config_file_path =
+            Path::new("resources/test_cases/file-handler/file_exist_return_ok.chf");
+        assert!(config_file_path.exists());
+
+        let mut app = ServerFixture::run_app(config_file_path);
+
+        let file_path = Path::new(app.get_executing_dir()).join("test.txt");
+
+        let content = b"Hello, this is a test file content!";
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(content).unwrap();
+
+        app.wait_for_start();
+
+        let response = reqwest::Client::new()
+            .get("http://localhost:3000/test.txt")
+            .header(http::header::RANGE, "bytes=50-60")
+            .send()
+            .await;
+
+        // Cleanup resources before assertion
+        app.stop_app();
+        _ = std::fs::remove_file(file_path);
+
+        let response = response.unwrap();
+        assert_eq!(&response.status(), &StatusCode::RANGE_NOT_SATISFIABLE);
+        assert_eq!(
+            response
+                .headers()
+                .get(http::header::CONTENT_RANGE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "bytes */35"
+        );
+        assert_eq!(response.text().await.unwrap(), "");
     }
 }
