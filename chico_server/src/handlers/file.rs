@@ -665,4 +665,66 @@ mod tests {
         let result = parse_range(range, file_size);
         assert_eq!(result, Some(vec![(0, 99)]));
     }
+
+    #[tokio::test]
+    async fn test_file_handler_valid_range() {
+        let content = b"Hello, this is a test file content!";
+        let mut temp_file = tempfile::NamedTempFile::new().unwrap();
+        temp_file.write_all(content).unwrap();
+
+        let file_path = temp_file.path().to_str().unwrap().to_string();
+        let file_handler = FileHandler::new(file_path.clone(), "/".to_string());
+
+        let request = http::Request::builder()
+            .header(http::header::RANGE, "bytes=0-4")
+            .body(MockBody::new(b""))
+            .unwrap();
+
+        let response = file_handler.handle(request).await;
+
+        assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+        assert_eq!(
+            response
+                .headers()
+                .get(http::header::CONTENT_RANGE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "bytes 0-4/35"
+        );
+
+        let response_body = response.boxed().collect().await.unwrap().to_bytes();
+        assert_eq!(*response_body, *b"Hello");
+    }
+
+    #[tokio::test]
+    async fn test_file_handler_invalid_range() {
+        let content = b"Hello, this is a test file content!";
+        let mut temp_file = tempfile::NamedTempFile::new().unwrap();
+        temp_file.write_all(content).unwrap();
+
+        let file_path = temp_file.path().to_str().unwrap().to_string();
+        let file_handler = FileHandler::new(file_path.clone(), "/".to_string());
+
+        let request = http::Request::builder()
+            .header(http::header::RANGE, "bytes=50-60")
+            .body(MockBody::new(b""))
+            .unwrap();
+
+        let response = file_handler.handle(request).await;
+
+        assert_eq!(response.status(), StatusCode::RANGE_NOT_SATISFIABLE);
+        assert_eq!(
+            response
+                .headers()
+                .get(http::header::CONTENT_RANGE)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "bytes */35"
+        );
+
+        let response_body = response.boxed().collect().await.unwrap().to_bytes();
+        assert_eq!(*response_body, *b"");
+    }
 }
