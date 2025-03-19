@@ -308,7 +308,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_file_handler_head_request_set_content_length() {
+    async fn test_file_handler_head_request_set_required_headers() {
         let content = r"<!DOCTYPE html>  
         <html>  
         <head>  
@@ -360,6 +360,15 @@ mod tests {
                 .to_str()
                 .unwrap(),
             file_size.to_string()
+        );
+        assert_eq!(
+            response
+                .headers()
+                .get(http::header::ACCEPT_RANGES)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "bytes".to_string()
         );
 
         let response_body = String::from_utf8(
