@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "strict", deny(warnings))]
+
 use std::{
     io::{BufRead, BufReader},
     path::Path,
@@ -126,10 +128,8 @@ impl Drop for ServerFixture {
 mod serial_integration {
     use std::{fs::File, io::Write, path::Path};
 
-    use http::StatusCode;
-
     use crate::ServerFixture;
-
+    use http::StatusCode;
     #[tokio::test]
     async fn test_respond_handler_ok_with_body_response() {
         let config_file_path =
@@ -529,5 +529,88 @@ mod serial_integration {
             "bytes */35"
         );
         assert_eq!(response.text().await.unwrap(), "");
+    }
+
+    #[tokio::test]
+    async fn test_file_handler_disallow_methods() {
+        let config_file_path =
+            Path::new("resources/test_cases/file-handler/file_exist_return_ok.chf");
+        assert!(config_file_path.exists());
+
+        let mut app = ServerFixture::run_app(config_file_path);
+
+        let file_path = Path::new(app.get_executing_dir()).join("test.txt");
+
+        let content = b"Hello, this is a test file content!";
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(content).unwrap();
+
+        app.wait_for_start();
+
+        let disallowed_methods = vec![
+            http::Method::POST,
+            http::Method::PUT,
+            http::Method::DELETE,
+            http::Method::PATCH,
+            http::Method::OPTIONS,
+        ];
+
+        for method in disallowed_methods {
+            let client = reqwest::Client::new();
+            let response = client
+                .request(method.clone(), "http://localhost:3000/test.txt")
+                .send()
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
+            assert_eq!(
+                response
+                    .headers()
+                    .get(http::header::ALLOW)
+                    .unwrap()
+                    .to_str()
+                    .unwrap(),
+                "GET, HEAD"
+            );
+        }
+
+        // Cleanup resources
+        app.stop_app();
+        _ = std::fs::remove_file(file_path);
+    }
+
+    #[tokio::test]
+    async fn test_file_handler_allow_methods() {
+        let config_file_path =
+            Path::new("resources/test_cases/file-handler/file_exist_return_ok.chf");
+        assert!(config_file_path.exists());
+
+        let mut app = ServerFixture::run_app(config_file_path);
+
+        let file_path = Path::new(app.get_executing_dir()).join("test.txt");
+
+        let content = b"Hello, this is a test file content!";
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(content).unwrap();
+
+        app.wait_for_start();
+
+        let allowed_methods = vec![http::Method::GET, http::Method::HEAD];
+
+        for method in allowed_methods {
+            let client = reqwest::Client::new();
+            let response = client
+                .request(method.clone(), "http://localhost:3000/test.txt")
+                .send()
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::OK);
+        }
+
+        // Cleanup resources
+        app.stop_app();
+        _ = std::fs::remove_file(file_path);
     }
 }
