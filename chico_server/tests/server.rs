@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "strict", deny(warnings))]
+
 use std::{
     io::{BufRead, BufReader},
     path::Path,
@@ -126,11 +128,8 @@ impl Drop for ServerFixture {
 mod serial_integration {
     use std::{fs::File, io::Write, path::Path};
 
-    use http::StatusCode;
-    use rstest::rstest;
-
     use crate::ServerFixture;
-
+    use http::StatusCode;
     #[tokio::test]
     async fn test_respond_handler_ok_with_body_response() {
         let config_file_path =
@@ -533,13 +532,7 @@ mod serial_integration {
     }
 
     #[tokio::test]
-    #[rstest]
-    #[case(http::Method::POST)]
-    #[case(http::Method::PUT)]
-    #[case(http::Method::DELETE)]
-    #[case(http::Method::PATCH)]
-    #[case(http::Method::OPTIONS)]
-    async fn test_file_handler_disallow_methods(#[case] method: http::Method) {
+    async fn test_file_handler_disallow_methods() {
         let config_file_path =
             Path::new("resources/test_cases/file-handler/file_exist_return_ok.chf");
         assert!(config_file_path.exists());
@@ -554,23 +547,33 @@ mod serial_integration {
 
         app.wait_for_start();
 
-        let client = reqwest::Client::new();
-        let response = client
-            .request(method.clone(), "http://localhost:3000/test.txt")
-            .send()
-            .await
-            .unwrap();
+        let disallowed_methods = vec![
+            http::Method::POST,
+            http::Method::PUT,
+            http::Method::DELETE,
+            http::Method::PATCH,
+            http::Method::OPTIONS,
+        ];
 
-        assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
-        assert_eq!(
-            response
-                .headers()
-                .get(http::header::ALLOW)
-                .unwrap()
-                .to_str()
-                .unwrap(),
-            "GET, HEAD"
-        );
+        for method in disallowed_methods {
+            let client = reqwest::Client::new();
+            let response = client
+                .request(method.clone(), "http://localhost:3000/test.txt")
+                .send()
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
+            assert_eq!(
+                response
+                    .headers()
+                    .get(http::header::ALLOW)
+                    .unwrap()
+                    .to_str()
+                    .unwrap(),
+                "GET, HEAD"
+            );
+        }
 
         // Cleanup resources
         app.stop_app();
@@ -578,10 +581,7 @@ mod serial_integration {
     }
 
     #[tokio::test]
-    #[rstest]
-    #[case(http::Method::GET)]
-    #[case(http::Method::HEAD)]
-    async fn test_file_handler_allow_methods(#[case] method: http::Method) {
+    async fn test_file_handler_allow_methods() {
         let config_file_path =
             Path::new("resources/test_cases/file-handler/file_exist_return_ok.chf");
         assert!(config_file_path.exists());
@@ -596,14 +596,18 @@ mod serial_integration {
 
         app.wait_for_start();
 
-        let client = reqwest::Client::new();
-        let response = client
-            .request(method.clone(), "http://localhost:3000/test.txt")
-            .send()
-            .await
-            .unwrap();
+        let allowed_methods = vec![http::Method::GET, http::Method::HEAD];
 
-        assert_eq!(response.status(), StatusCode::OK);
+        for method in allowed_methods {
+            let client = reqwest::Client::new();
+            let response = client
+                .request(method.clone(), "http://localhost:3000/test.txt")
+                .send()
+                .await
+                .unwrap();
+
+            assert_eq!(response.status(), StatusCode::OK);
+        }
 
         // Cleanup resources
         app.stop_app();
