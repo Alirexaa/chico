@@ -17,7 +17,7 @@ use tokio_util::io::ReaderStream;
 
 use crate::handlers::respond::RespondHandler;
 
-use super::{BoxBody, RequestHandler};
+use super::{full, BoxBody, RequestHandler};
 
 static MIME_DICT: std::sync::LazyLock<mimee::MimeDict> =
     std::sync::LazyLock::new(|| mimee::MimeDict::new());
@@ -44,6 +44,14 @@ impl RequestHandler for FileHandler {
         &self,
         _request: hyper::Request<impl hyper::body::Body>,
     ) -> http::Response<BoxBody> {
+        let req_method = _request.method();
+        if req_method != http::Method::GET && req_method != http::Method::HEAD {
+            return http::response::Builder::new()
+                .status(StatusCode::METHOD_NOT_ALLOWED)
+                .header(http::header::ALLOW, "GET, HEAD")
+                .body(full(""))
+                .unwrap();
+        }
         let mut path = PathBuf::from(&self.path);
 
         if !path.is_absolute() {
@@ -726,5 +734,58 @@ mod tests {
 
         let response_body = response.boxed().collect().await.unwrap().to_bytes();
         assert_eq!(*response_body, *b"");
+    }
+
+    #[tokio::test]
+    #[rstest]
+    #[case(http::Method::POST)]
+    #[case(http::Method::PUT)]
+    #[case(http::Method::DELETE)]
+    #[case(http::Method::PATCH)]
+    #[case(http::Method::OPTIONS)]
+    async fn test_file_handler_disallow_methods(#[case] method: http::Method) {
+        let file_handler = FileHandler::new("index.html".to_string(), "/".to_string());
+
+        let request_body: MockBody = MockBody::new(b"");
+        let request = http::Request::builder()
+            .method(method)
+            .body(request_body)
+            .unwrap();
+
+        let response = file_handler.handle(request).await;
+
+        assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
+        assert_eq!(
+            response
+                .headers()
+                .get(http::header::ALLOW)
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "GET, HEAD"
+        );
+    }
+
+    #[tokio::test]
+    #[rstest]
+    #[case(http::Method::GET)]
+    #[case(http::Method::HEAD)]
+    async fn test_file_handler_allow_methods(#[case] method: http::Method) {
+        let content = b"Hello, this is a test file content!";
+        let mut temp_file = tempfile::NamedTempFile::new().unwrap();
+        temp_file.write_all(content).unwrap();
+
+        let file_path = temp_file.path().to_str().unwrap().to_string();
+        let file_handler = FileHandler::new(file_path.clone(), "/".to_string());
+
+        let request_body: MockBody = MockBody::new(b"");
+        let request = http::Request::builder()
+            .method(method)
+            .body(request_body)
+            .unwrap();
+
+        let response = file_handler.handle(request).await;
+
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }
