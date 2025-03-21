@@ -1,5 +1,10 @@
 # Chico
 
+[![CI](https://github.com/Alirexaa/chico/actions/workflows/ci.yaml/badge.svg)](https://github.com/Alirexaa/chico/actions/workflows/ci.yaml) 
+[![codecov](https://codecov.io/github/Alirexaa/chico/graph/badge.svg?token=HLA0G8M60V)](https://codecov.io/github/Alirexaa/chico)
+![GitHub License](https://img.shields.io/github/license/alirexaa/chico?color=blue)
+
+
 Chico is a fast web server and load balancer written in Rust. It supports various handlers like file serving, proxying, directory browsing, and custom responses.
 
 ## Features
