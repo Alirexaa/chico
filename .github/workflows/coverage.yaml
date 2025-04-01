@@ -15,6 +15,7 @@ env:
 
 jobs:
   coverage:
+    if: github.actor != 'dependabot[bot]'  # Skip this job if the actor is Dependabot  
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
