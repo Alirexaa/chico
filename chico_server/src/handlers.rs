@@ -1,23 +1,20 @@
 use std::{str::FromStr, sync::Arc};
 
+use crate::{config::ConfigExt, uri::UriExt, virtual_host::VirtualHostExt};
 use chico_file::types::Config;
 use file::FileHandler;
 use http::Uri;
-use redirect::RedirectHandler;
-// use reverse_proxy::ReverseProxyHandler;
-
-use crate::{config::ConfigExt, uri::UriExt, virtual_host::VirtualHostExt};
 use hyper::{
     body::{Body, Bytes},
     Response,
 };
+use redirect::RedirectHandler;
 use respond::RespondHandler;
 pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, std::io::Error>;
 
 mod file;
 mod redirect;
 mod respond;
-// mod reverse_proxy;
 pub trait RequestHandler {
     async fn handle(&self, _request: &hyper::Request<impl Body>) -> Response<BoxBody>;
 }
