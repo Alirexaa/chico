@@ -88,7 +88,7 @@ async fn handle_listener(
 
                 // Spawn a tokio task to serve multiple connections concurrently
                 tokio::spawn(async move {
-                    _ = handle_connection(config_clone, stream).await;
+                    handle_connection(config_clone, stream).await;
                 });
             }
             _ = shutdown.recv() => {
