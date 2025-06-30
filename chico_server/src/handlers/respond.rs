@@ -1,22 +1,37 @@
-use chico_file::types;
-use http::{status, Response};
+use std::collections::HashMap;
+
+use http::Response;
 use hyper::body::Body;
 
 use super::{full, BoxBody, RequestHandler};
 
 #[derive(PartialEq, Debug)]
 pub struct RespondHandler {
-    handler: types::Handler,
+    status: u16,
+    body: Option<String>,
+    set_headers: HashMap<String, String>,
 }
 
 impl RespondHandler {
     #[allow(dead_code)]
     pub fn new(status: u16, body: Option<String>) -> RespondHandler {
         RespondHandler {
-            handler: types::Handler::Respond {
-                status: Some(status),
-                body: (body),
-            },
+            status,
+            body,
+            set_headers: HashMap::new(),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn with_headers(
+        status: u16,
+        body: Option<String>,
+        set_headers: HashMap<String, String>,
+    ) -> RespondHandler {
+        RespondHandler {
+            status,
+            body,
+            set_headers,
         }
     }
 
@@ -78,17 +93,16 @@ impl RespondHandler {
 
 impl RequestHandler for RespondHandler {
     async fn handle(&self, _request: &hyper::Request<impl Body>) -> hyper::Response<BoxBody> {
-        if let types::Handler::Respond { status, body } = &self.handler {
-            let status = status.unwrap_or(status::StatusCode::OK.as_u16());
-            let body = body.as_ref().unwrap_or(&String::new()).clone();
+        let body = self.body.as_ref().unwrap_or(&String::new()).clone();
 
-            Response::builder().status(status).body(full(body)).unwrap()
-        } else {
-            unimplemented!(
-                "Only respond handler is supported. Given handler was {}",
-                self.handler.type_name()
-            )
+        let mut builder = Response::builder().status(self.status);
+        for (key, value) in &self.set_headers {
+            builder = builder.header(key, value);
         }
+
+        let response = builder.body(full(body)).unwrap();
+
+        response
     }
 }
 
@@ -96,10 +110,11 @@ impl RequestHandler for RespondHandler {
 mod tests {
 
     use crate::{handlers::RequestHandler, test_utils::MockBody};
-    use chico_file::types;
+    use claims::assert_some;
     use http::{Request, StatusCode};
     use http_body_util::BodyExt;
     use rstest::rstest;
+    use std::collections::HashMap;
 
     use super::RespondHandler;
 
@@ -107,12 +122,7 @@ mod tests {
     async fn test_respond_handler_specified_status_no_body() {
         use super::RespondHandler;
 
-        let respond_handler = RespondHandler {
-            handler: chico_file::types::Handler::Respond {
-                status: Some(200),
-                body: None,
-            },
-        };
+        let respond_handler = RespondHandler::new(200, None);
 
         let request_body: MockBody = MockBody::new(b"");
 
@@ -136,47 +146,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_respond_handler_specified_body_no_status() {
-        use super::RespondHandler;
-
-        let respond_handler = RespondHandler {
-            handler: chico_file::types::Handler::Respond {
-                status: None,
-                body: Some(String::from("Hello, world!")),
-            },
-        };
-
-        let request_body: MockBody = MockBody::new(b"Hello, world!");
-
-        let request = Request::builder().body(request_body).unwrap();
-        let response = respond_handler.handle(&request).await;
-
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let response_body = String::from_utf8(
-            response
-                .boxed()
-                .collect()
-                .await
-                .unwrap()
-                .to_bytes()
-                .to_vec(),
-        )
-        .unwrap();
-
-        assert_eq!(response_body, "Hello, world!");
-    }
-
-    #[tokio::test]
     async fn test_respond_handler_specified_body_specified_status() {
         use super::RespondHandler;
 
-        let respond_handler = RespondHandler {
-            handler: chico_file::types::Handler::Respond {
-                status: Some(403),
-                body: Some(String::from("Access denied")),
-            },
-        };
+        let respond_handler = RespondHandler::new(403, Some(String::from("Access denied")));
 
         let request_body: MockBody = MockBody::new(b"Access denied");
 
@@ -199,18 +172,58 @@ mod tests {
         assert_eq!(response_body, "Access denied");
     }
 
+    #[tokio::test]
+    async fn test_respond_handler_with_headers() {
+        use super::RespondHandler;
+
+        let mut set_headers = HashMap::new();
+        set_headers.insert("Header-Key-1".to_string(), "value-1".to_string());
+        set_headers.insert("Header-Key-2".to_string(), "value-2".to_string());
+        let respond_handler =
+            RespondHandler::with_headers(200, Some(String::from("Everything is OK")), set_headers);
+
+        let request_body: MockBody = MockBody::new(b"Everything is OK");
+
+        let request = Request::builder().body(request_body).unwrap();
+        let response = respond_handler.handle(&request).await;
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        assert_some!(
+            response.headers().get("Header-Key-1".to_string()),
+            "value-1"
+        );
+
+        assert_some!(
+            response.headers().get("Header-Key-2".to_string()),
+            "value-2"
+        );
+
+        let response_body = String::from_utf8(
+            response
+                .boxed()
+                .collect()
+                .await
+                .unwrap()
+                .to_bytes()
+                .to_vec(),
+        )
+        .unwrap();
+
+        assert_eq!(response_body, "Everything is OK");
+    }
+
     #[rstest]
     #[case(200, None,RespondHandler {
-        handler: types::Handler::Respond {
-            status: Some(200),
-            body: None,
-        },
+        status: 200,
+        body : None,
+        set_headers : HashMap::new()
     })]
     #[case(200, Some("OK".to_string()),RespondHandler {
-        handler: types::Handler::Respond {
-            status: Some(200),
-            body: Some("OK".to_string()),
-        },
+       status: 200,
+       body: Some("OK".to_string()),
+       set_headers : HashMap::new()
+
     })]
     fn test_respond_handler_new(
         #[case] status: u16,
