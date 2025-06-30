@@ -281,6 +281,7 @@ mod tests {
     #[rstest]
     #[case("http://exa mple.com ")] // invalid host, contain space in hostname
     #[case("‎")] // invalid host, contain invisible ASCII code
+    #[case("/blog")] // invalid host
     #[tokio::test]
     async fn test_select_handler_should_return_bad_request_respond_handler_when_host_is_not_valid(
         #[case] host_header: &str,
