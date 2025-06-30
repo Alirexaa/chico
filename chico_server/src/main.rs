@@ -1,9 +1,8 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
 use clap::Parser;
 use config::validate_config_file;
-use log::error;
 use server::run_server;
-use std::process::exit;
+use std::process::ExitCode;
 mod cli;
 mod config;
 mod handlers;
@@ -13,7 +12,7 @@ mod test_utils;
 mod uri;
 mod virtual_host;
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
     env_logger::builder()
         .filter_level(log::LevelFilter::Info)
         .target(env_logger::Target::Stdout)
@@ -22,23 +21,24 @@ async fn main() {
     let cli = cli::CLI::parse();
     match cli.command {
         cli::Commands::Run { config } => {
-            let conf = validate_config_file(config.as_str())
-                .await
-                .unwrap_or_else(|err| {
-                    error!("{}", err);
-                    exit(1);
-                });
-            run_server(conf).await
+            let result = validate_config_file(config.as_str()).await;
+
+            let Ok(conf) = result else {
+                eprintln!("{}", result.err().unwrap());
+                return ExitCode::FAILURE;
+            };
+            run_server(conf).await;
+            return ExitCode::SUCCESS;
         }
         cli::Commands::Validate { config } => {
-            validate_config_file(config.as_str())
-                .await
-                .unwrap_or_else(|err| {
-                    eprintln!("{}", err);
-                    exit(1);
-                });
+            let result = validate_config_file(config.as_str()).await;
+
+            if let Err(e) = result {
+                eprintln!("{}", e);
+                return ExitCode::FAILURE;
+            };
             println!("✅✅✅ Specified config is valid.");
-            exit(0);
+            return ExitCode::SUCCESS;
         }
     }
 }
