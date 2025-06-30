@@ -4,7 +4,8 @@ use hyper::{body::Body, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
 use log::{error, info};
 use std::{convert::Infallible, net::SocketAddr, sync::Arc};
-use tokio::net::TcpListener;
+use tokio::select;
+use tokio::{net::TcpListener, sync::broadcast};
 
 use crate::{
     config::ConfigExt,
@@ -38,37 +39,63 @@ pub async fn run_server(config: Config) {
         );
     }
 
+    // Create a broadcast channel for shutdown signals
+    let (shutdown_tx, _) = broadcast::channel::<()>(1);
+
     let mut handles = vec![];
 
     let config = Arc::new(config);
 
     for listener in listeners {
+        let mut rx = shutdown_tx.subscribe();
         let config_clone = config.clone();
         let join_handle =
-            tokio::spawn(async move { handle_listener(config_clone, listener).await });
+            tokio::spawn(async move { handle_listener(config_clone, listener, &mut rx).await });
         handles.push(join_handle);
     }
 
+    // Wait for shutdown signal (Ctrl+C)
+    shutdown_signal().await;
+
+    info!("Shutdown signal received, notifying listeners...");
+
+    // Send shutdown notification to all listener tasks
+    let _ = shutdown_tx.send(());
+
+    // Wait for all listeners to shut down gracefully
     for handle in handles {
         let _ = handle.await; // Wait for each listener to complete
     }
 }
 
-async fn handle_listener(config: Arc<Config>, listener: TcpListener) -> ! {
+async fn handle_listener(
+    config: Arc<Config>,
+    listener: TcpListener,
+    shutdown: &mut broadcast::Receiver<()>,
+) -> () {
     loop {
-        let (stream, _) = match listener.accept().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                error!("Error accepting connection: {:?}", e);
-                continue;
-            }
-        };
-        let config_clone = config.clone();
+        select! {
+            res = listener.accept() => {
+                let (stream, _) = match res {
+                    Ok(conn) => conn,
+                    Err(e) => {
+                        error!("Error accepting connection: {:?}", e);
+                        continue;
+                    }
+                };
 
-        // Spawn a tokio task to serve multiple connections concurrently
-        tokio::spawn(async move {
-            _ = handle_connection(config_clone, stream).await;
-        });
+                let config_clone = config.clone();
+
+                // Spawn a tokio task to serve multiple connections concurrently
+                tokio::spawn(async move {
+                    _ = handle_connection(config_clone, stream).await;
+                });
+            }
+            _ = shutdown.recv() => {
+                info!("Shutdown signal received, stopping listener");
+                break;
+            }
+        }
     }
 }
 
@@ -99,4 +126,11 @@ async fn handle_request(
 ) -> Result<Response<BoxBody>, Infallible> {
     let response = handlers::handle_request(&request, config).await;
     Ok(response)
+}
+
+async fn shutdown_signal() {
+    // Wait for the CTRL+C signal
+    tokio::signal::ctrl_c()
+        .await
+        .expect("failed to install CTRL+C signal handler");
 }
