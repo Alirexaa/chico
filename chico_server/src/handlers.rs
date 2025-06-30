@@ -83,9 +83,6 @@ pub async fn handle_request(
                 .handle(request)
                 .await
         }
-        chico_file::types::Handler::Proxy(_) => todo!(),
-        chico_file::types::Handler::Dir(_) => todo!(),
-        chico_file::types::Handler::Browse(_) => todo!(),
         chico_file::types::Handler::Respond { status, body } => {
             RespondHandler::new(status.unwrap_or(200), body.clone())
                 .handle(request)
@@ -101,6 +98,7 @@ pub async fn handle_request(
             .handle(request)
             .await
         }
+        _ => todo!(),
     };
 
     response
