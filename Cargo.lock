@@ -184,6 +184,7 @@ dependencies = [
  "assert_cmd",
  "bytes",
  "chico_file",
+ "claims",
  "clap",
  "env_logger",
  "futures-util",
@@ -201,6 +202,12 @@ dependencies = [
  "tokio",
  "tokio-util",
 ]
+
+[[package]]
+name = "claims"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bba18ee93d577a8428902687bcc2b6b45a56b1981a1f6d779731c86cc4c5db18"
 
 [[package]]
 name = "clap"

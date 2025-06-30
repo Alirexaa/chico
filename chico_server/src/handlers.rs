@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use crate::{config::ConfigExt, uri::UriExt, virtual_host::VirtualHostExt};
 use chico_file::types::Config;
@@ -127,7 +127,12 @@ impl UtilitiesResponses {
 </body>  
 </html>";
 
-        RespondHandler::not_found_with_body(body.to_string())
+        let mut set_headers = HashMap::new();
+        set_headers.insert(
+            hyper::header::CONTENT_TYPE.to_string(),
+            "text/html; charset=utf-8".to_string(),
+        );
+        RespondHandler::with_headers(404, Some(body.to_string()), set_headers)
     }
 
     pub fn bad_request_host_header_not_found_respond_handler() -> RespondHandler {
@@ -146,6 +151,7 @@ mod tests {
     use std::sync::Arc;
 
     use chico_file::types::{Config, Handler, Route, VirtualHost};
+    use claims::assert_some;
     use http::{Request, StatusCode};
     use http_body_util::BodyExt;
     use rstest::rstest;
@@ -220,6 +226,10 @@ mod tests {
         let response = handle_request(&request, Arc::new(config)).await;
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_some!(
+            response.headers().get(hyper::header::CONTENT_TYPE),
+            "text/html; charset=utf-8"
+        );
         let response_body = String::from_utf8(
             response
                 .boxed()
