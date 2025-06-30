@@ -4,7 +4,7 @@ use std::{
     io::{BufRead, BufReader},
     path::Path,
     process::Stdio,
-    sync::{mpsc, Arc, Mutex},
+    sync::mpsc,
     thread,
 };
 
@@ -12,7 +12,7 @@ pub(crate) struct ServerFixture {
     process: std::process::Child,
     executing_dir: String,
     exe_path: String,
-    log_receiver: Arc<Mutex<mpsc::Receiver<String>>>, // Store logs for `wait_for_text`
+    log_receiver: mpsc::Receiver<String>, // Store logs for `wait_for_text`
 }
 
 impl ServerFixture {
@@ -34,7 +34,6 @@ impl ServerFixture {
 
         // Create channel for log forwarding
         let (log_sender, log_receiver) = mpsc::channel();
-        let log_receiver = Arc::new(Mutex::new(log_receiver));
 
         // Spawn threads to log stdout and stderr
         ServerFixture::log_output(stdout, "STDOUT", log_sender.clone());
@@ -80,10 +79,8 @@ impl ServerFixture {
     }
 
     pub fn wait_for_text(&mut self, text: &str) {
-        let log_receiver = self.log_receiver.lock().unwrap();
-
         loop {
-            match log_receiver.recv() {
+            match self.log_receiver.recv() {
                 Ok(line) => {
                     if line.contains(text) {
                         return;
