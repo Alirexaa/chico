@@ -278,4 +278,41 @@ mod tests {
         let body = r"Host header is missing in the request.";
         assert_eq!(response_body, body);
     }
+
+    #[tokio::test]
+    async fn test_select_handler_should_return_bad_request_respond_handler_when_host_is_not_valid()
+    {
+        let config = Config {
+            virtual_hosts: vec![VirtualHost {
+                domain: "localhost".to_string(),
+                routes: vec![Route {
+                    handler: Handler::File("index.html".to_string()),
+                    path: "/".to_string(),
+                    middlewares: vec![],
+                }],
+            }],
+        };
+
+        let request = Request::builder()
+            .uri("http://localhost/blog")
+            .header(http::header::HOST, "http://exa mple.com")
+            .body(MockBody::new(b""))
+            .unwrap();
+
+        let response = handle_request(&request, Arc::new(config)).await;
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let response_body = String::from_utf8(
+            response
+                .boxed()
+                .collect()
+                .await
+                .unwrap()
+                .to_bytes()
+                .to_vec(),
+        )
+        .unwrap();
+        let body = r"Invalid Host header.";
+        assert_eq!(response_body, body);
+    }
 }
