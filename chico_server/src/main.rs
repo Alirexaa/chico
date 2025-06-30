@@ -28,7 +28,8 @@ async fn main() {
                     error!("{}", err);
                     exit(1);
                 });
-            run_server(conf).await
+            run_server(conf).await;
+            exit(0);
         }
         cli::Commands::Validate { config } => {
             validate_config_file(config.as_str())
