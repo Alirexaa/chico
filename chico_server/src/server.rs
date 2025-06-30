@@ -8,7 +8,7 @@ use tokio::net::TcpListener;
 
 use crate::{
     config::ConfigExt,
-    handlers::{select_handler, BoxBody, RequestHandler},
+    handlers::{self, BoxBody},
 };
 
 pub async fn run_server(config: Config) {
@@ -81,7 +81,7 @@ async fn handle_connection(config: Arc<Config>, stream: tokio::net::TcpStream) {
 
     let service = service_fn(move |req| {
         let config_clone = config_clone.clone();
-        async move { handle_request(req, config_clone).await }
+        async move { handle_request(&req, config_clone).await }
     });
 
     if let Err(err) = http1::Builder::new()
@@ -94,8 +94,9 @@ async fn handle_connection(config: Arc<Config>, stream: tokio::net::TcpStream) {
 }
 
 async fn handle_request(
-    request: Request<impl Body>,
+    request: &Request<impl Body>,
     config: Arc<Config>,
 ) -> Result<Response<BoxBody>, Infallible> {
-    Ok(select_handler(&request, config).handle(request).await)
+    let response = handlers::handle_request(&request, config).await;
+    Ok(response)
 }

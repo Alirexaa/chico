@@ -77,7 +77,7 @@ impl RespondHandler {
 }
 
 impl RequestHandler for RespondHandler {
-    async fn handle(&self, _request: hyper::Request<impl Body>) -> hyper::Response<BoxBody> {
+    async fn handle(&self, _request: &hyper::Request<impl Body>) -> hyper::Response<BoxBody> {
         if let types::Handler::Respond { status, body } = &self.handler {
             let status = status.unwrap_or(status::StatusCode::OK.as_u16());
             let body = body.as_ref().unwrap_or(&String::new()).clone();
@@ -117,7 +117,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
 
         let request = Request::builder().body(request_body).unwrap();
-        let response = respond_handler.handle(request).await;
+        let response = respond_handler.handle(&request).await;
 
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -149,7 +149,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"Hello, world!");
 
         let request = Request::builder().body(request_body).unwrap();
-        let response = respond_handler.handle(request).await;
+        let response = respond_handler.handle(&request).await;
 
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -181,7 +181,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"Access denied");
 
         let request = Request::builder().body(request_body).unwrap();
-        let response = respond_handler.handle(request).await;
+        let response = respond_handler.handle(&request).await;
 
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
 

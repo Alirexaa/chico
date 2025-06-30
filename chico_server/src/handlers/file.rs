@@ -42,7 +42,7 @@ impl FileHandler {
 impl RequestHandler for FileHandler {
     async fn handle(
         &self,
-        _request: hyper::Request<impl hyper::body::Body>,
+        _request: &hyper::Request<impl hyper::body::Body>,
     ) -> http::Response<BoxBody> {
         let req_method = _request.method();
         if req_method != http::Method::GET && req_method != http::Method::HEAD {
@@ -113,7 +113,7 @@ fn extract_ending_from_req_path(req_path: &str, route: &str) -> Option<String> {
 }
 
 async fn process_file(
-    request: hyper::Request<impl hyper::body::Body>,
+    request: &hyper::Request<impl hyper::body::Body>,
     file_name: &str,
     mut file: File,
     metadata: &Metadata,
@@ -188,7 +188,7 @@ async fn process_file(
 }
 
 async fn handle_file_error(
-    _request: http::Request<impl hyper::body::Body>,
+    _request: &http::Request<impl hyper::body::Body>,
     error: ErrorKind,
 ) -> Response<BoxBody> {
     let handler = match error {
@@ -290,7 +290,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
-        let response = file_handler.handle(request).await;
+        let response = file_handler.handle(&request).await;
 
         assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(
@@ -352,7 +352,7 @@ mod tests {
             .body(request_body)
             .unwrap();
 
-        let response = file_handler.handle(request).await;
+        let response = file_handler.handle(&request).await;
 
         assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(
@@ -426,7 +426,7 @@ mod tests {
             .body(request_body)
             .unwrap();
 
-        let response = file_handler.handle(request).await;
+        let response = file_handler.handle(&request).await;
 
         assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(
@@ -479,7 +479,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
-        let response = file_handler.handle(request).await;
+        let response = file_handler.handle(&request).await;
 
         assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(
@@ -514,7 +514,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
-        let response = file_handler.handle(request).await;
+        let response = file_handler.handle(&request).await;
 
         assert_eq!(&response.status(), &StatusCode::NOT_FOUND);
         let response_body = String::from_utf8(
@@ -540,7 +540,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
-        let response = file_handler.handle(request).await;
+        let response = file_handler.handle(&request).await;
 
         assert_eq!(&response.status(), &StatusCode::FORBIDDEN);
         let response_body = String::from_utf8(
@@ -566,8 +566,8 @@ mod tests {
 
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
-        let actual_response = handle_file_error(request.clone(), error).await;
-        let expected_response = handler.handle(request).await;
+        let actual_response = handle_file_error(&request, error).await;
+        let expected_response = handler.handle(&request).await;
         assert_eq!(expected_response.status(), actual_response.status());
         assert_eq!(
             expected_response
@@ -688,7 +688,7 @@ mod tests {
             .body(MockBody::new(b""))
             .unwrap();
 
-        let response = file_handler.handle(request).await;
+        let response = file_handler.handle(&request).await;
 
         assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
         assert_eq!(
@@ -719,7 +719,7 @@ mod tests {
             .body(MockBody::new(b""))
             .unwrap();
 
-        let response = file_handler.handle(request).await;
+        let response = file_handler.handle(&request).await;
 
         assert_eq!(response.status(), StatusCode::RANGE_NOT_SATISFIABLE);
         assert_eq!(
@@ -752,7 +752,7 @@ mod tests {
             .body(request_body)
             .unwrap();
 
-        let response = file_handler.handle(request).await;
+        let response = file_handler.handle(&request).await;
 
         assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
         assert_eq!(
@@ -784,7 +784,7 @@ mod tests {
             .body(request_body)
             .unwrap();
 
-        let response = file_handler.handle(request).await;
+        let response = file_handler.handle(&request).await;
 
         assert_eq!(response.status(), StatusCode::OK);
     }

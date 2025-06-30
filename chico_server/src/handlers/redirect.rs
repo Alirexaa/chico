@@ -11,7 +11,7 @@ pub struct RedirectHandler {
 impl RequestHandler for RedirectHandler {
     async fn handle(
         &self,
-        _request: hyper::Request<impl hyper::body::Body>,
+        _request: &hyper::Request<impl hyper::body::Body>,
     ) -> http::Response<BoxBody> {
         if let types::Handler::Redirect { path, status_code } = &self.handler {
             // Based on chico file path is always some
@@ -53,7 +53,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
-        let response = redirect_handler.handle(request).await;
+        let response = redirect_handler.handle(&request).await;
 
         assert_eq!(&response.status(), &StatusCode::FOUND);
         assert_eq!(
@@ -79,7 +79,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
-        let response = redirect_handler.handle(request).await;
+        let response = redirect_handler.handle(&request).await;
 
         assert_eq!(&response.status(), &StatusCode::TEMPORARY_REDIRECT);
         assert_eq!(
