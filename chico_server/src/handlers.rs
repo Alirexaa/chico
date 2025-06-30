@@ -148,6 +148,7 @@ mod tests {
     use chico_file::types::{Config, Handler, Route, VirtualHost};
     use http::{Request, StatusCode};
     use http_body_util::BodyExt;
+    use rstest::rstest;
 
     use crate::test_utils::MockBody;
 
@@ -277,9 +278,13 @@ mod tests {
         assert_eq!(response_body, body);
     }
 
+    #[rstest]
+    #[case("http://exa mple.com ")] // invalid host, contain space in hostname
+    #[case("‎")] // invalid host, contain invisible ASCII code
     #[tokio::test]
-    async fn test_select_handler_should_return_bad_request_respond_handler_when_host_is_not_valid()
-    {
+    async fn test_select_handler_should_return_bad_request_respond_handler_when_host_is_not_valid(
+        #[case] host_header: &str,
+    ) {
         let config = Config {
             virtual_hosts: vec![VirtualHost {
                 domain: "localhost".to_string(),
@@ -293,7 +298,7 @@ mod tests {
 
         let request = Request::builder()
             .uri("http://localhost/blog")
-            .header(http::header::HOST, "http://exa mple.com")
+            .header(http::header::HOST, host_header)
             .body(MockBody::new(b""))
             .unwrap();
 
