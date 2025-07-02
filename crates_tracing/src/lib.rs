@@ -1,8 +1,13 @@
 use std::path::PathBuf;
 
 use directories::ProjectDirs;
+use opentelemetry::{trace::TracerProvider, KeyValue};
+use opentelemetry_sdk::Resource;
 use tracing::level_filters::LevelFilter;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
+use tracing_opentelemetry::OpenTelemetryLayer;
+use tracing_subscriber::{
+    filter::Targets, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer,
+};
 
 /// Initializes the `tracing` logging framework.
 ///
@@ -14,6 +19,13 @@ pub fn init(log_file_name: String, app_name: String) {
 }
 
 fn init_with_default_level(level: LevelFilter, log_file_name: String, app_name: String) {
+    let filter = Targets::new()
+        .with_target("chico", level)
+        .with_target("tokio", LevelFilter::OFF)
+        .with_target("hyper", LevelFilter::OFF)
+        .with_target("opentelemetry_sdkyper", LevelFilter::OFF)
+        .with_target(" opentelemetry-otlp", LevelFilter::OFF);
+    // add other crates as needed
     let env_filter = EnvFilter::builder()
         .with_default_directive(level.into())
         .from_env_lossy();
@@ -43,9 +55,35 @@ fn init_with_default_level(level: LevelFilter, log_file_name: String, app_name: 
         .with_filter(env_filter)
         .boxed();
 
+    let otlp_exporter = opentelemetry_otlp::SpanExporterBuilder::new()
+        .with_tonic()
+        .build()
+        .unwrap();
+
+    let resource = Resource::builder()
+        .with_attributes(vec![KeyValue::new("service.name", "chico")])
+        .build();
+    // Create a tracer provider with the exporter
+    let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        .with_batch_exporter(otlp_exporter)
+        .with_resource(resource)
+        .build();
+
+    // Extract a tracer from the provider
+    let tracer = tracer_provider.tracer("chico");
+
+    let env_filter = EnvFilter::builder()
+        .with_default_directive(level.into())
+        .from_env_lossy();
+
+    // Create tracing layer with the tracer
+    let telemetry = OpenTelemetryLayer::new(tracer).with_filter(env_filter);
+
     tracing_subscriber::registry()
         .with(stdout_layer)
         .with(file_layer)
+        .with(telemetry)
+        .with(filter)
         .init();
 }
 
