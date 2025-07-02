@@ -10,6 +10,7 @@ use http::{Request, Uri};
 use hyper::{body::Bytes, Response};
 use redirect::RedirectHandler;
 use respond::RespondHandler;
+use tracing::info_span;
 pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, std::io::Error>;
 
 mod file;
@@ -105,6 +106,8 @@ where
             .await
         }
         chico_file::types::Handler::Proxy(upstream) => {
+            let span = info_span!("reverse_proxy");
+            let _guard = span.enter();
             ReverseProxyHandler::new(upstream.clone())
                 .handle(request)
                 .await

@@ -3,10 +3,10 @@ use http::{Request, Response};
 use hyper::body::Incoming;
 use hyper::{server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
-use log::{error, info};
 use std::{convert::Infallible, net::SocketAddr, sync::Arc};
 use tokio::select;
 use tokio::{net::TcpListener, sync::broadcast};
+use tracing::{error, info, info_span};
 
 use crate::{
     config::ConfigExt,
@@ -75,6 +75,8 @@ async fn handle_listener(
     shutdown: &mut broadcast::Receiver<()>,
 ) -> () {
     loop {
+        let span = info_span!("listener.accept.loop");
+        let _guard = span.enter();
         select! {
             res = listener.accept() => {
                 let (stream, _) = match res {

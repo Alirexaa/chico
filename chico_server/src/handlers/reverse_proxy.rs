@@ -3,6 +3,7 @@ use http_body_util::BodyExt;
 use hyper::{Request, Response};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpStream;
+use tracing::{debug, error, info_span};
 
 use crate::handlers::RequestHandler;
 
@@ -24,15 +25,23 @@ impl RequestHandler for ReverseProxyHandler {
         B::Data: Send,
         B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
     {
+        let span = info_span!("my_span");
+        let _guard = span.enter();
+        debug!("start connect to upstream");
         let client_stream = TcpStream::connect(&self.upstream).await.unwrap();
         let io = TokioIo::new(client_stream);
+        debug!("connected to upstream");
 
+        debug!("start handshake to upstream");
         let (mut sender, conn) = hyper::client::conn::http1::handshake(io).await.unwrap();
+        debug!("handshaked to upstream");
 
         tokio::task::spawn(async move {
+            debug!("waiting for the connection");
             if let Err(err) = conn.await {
-                println!("Connection failed: {:?}", err);
+                error!("Connection failed: {:?}", err);
             }
+            debug!("connection complated");
         });
 
         let uri_string = format!(
@@ -56,12 +65,18 @@ impl RequestHandler for ReverseProxyHandler {
         );
         *request.uri_mut() = uri;
 
+        debug!("start sending request");
+
         let response = sender.send_request(request).await.unwrap();
+
+        debug!("request sent");
+        debug!("start converting response");
 
         let (parts, body) = response.into_parts();
         let boxed_body = body
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
             .boxed();
+        debug!("response boxed");
 
         Response::from_parts(parts, boxed_body)
     }

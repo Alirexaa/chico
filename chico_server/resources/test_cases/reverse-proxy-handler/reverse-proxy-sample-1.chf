@@ -1,5 +1,11 @@
-localhost:4000 {
+127.0.0.1:4000 {
     route /* {
-        proxy localhost:29320
+        proxy 127.0.0.1:29320
+    }
+}
+
+127.0.0.1:29320 {
+    route / {
+        respond "Hello"
     }
 }
