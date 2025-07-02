@@ -1,7 +1,7 @@
 use chico_file::types;
 use http::{Response, StatusCode};
 
-use super::{full, BoxBody, RequestHandler};
+use super::{full, RequestHandler};
 
 #[derive(PartialEq, Debug)]
 pub struct RedirectHandler {
@@ -9,10 +9,12 @@ pub struct RedirectHandler {
 }
 
 impl RequestHandler for RedirectHandler {
-    async fn handle(
-        &self,
-        _request: &hyper::Request<impl hyper::body::Body>,
-    ) -> http::Response<BoxBody> {
+    async fn handle<B>(&self, _request: hyper::Request<B>) -> Response<super::BoxBody>
+    where
+        B: hyper::body::Body + Send + 'static,
+        B::Data: Send,
+        B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+    {
         if let types::Handler::Redirect { path, status_code } = &self.handler {
             // Based on chico file path is always some
             let path = path.clone().expect("Expected path value not provided.");
@@ -53,7 +55,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
-        let response = redirect_handler.handle(&request).await;
+        let response = redirect_handler.handle(request).await;
 
         assert_eq!(&response.status(), &StatusCode::FOUND);
         assert_eq!(
@@ -79,7 +81,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
-        let response = redirect_handler.handle(&request).await;
+        let response = redirect_handler.handle(request).await;
 
         assert_eq!(&response.status(), &StatusCode::TEMPORARY_REDIRECT);
         assert_eq!(

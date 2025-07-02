@@ -1,6 +1,7 @@
 use chico_file::types::Config;
 use http::{Request, Response};
-use hyper::{body::Body, server::conn::http1, service::service_fn};
+use hyper::body::Incoming;
+use hyper::{server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
 use log::{error, info};
 use std::{convert::Infallible, net::SocketAddr, sync::Arc};
@@ -108,7 +109,7 @@ async fn handle_connection(config: Arc<Config>, stream: tokio::net::TcpStream) {
 
     let service = service_fn(move |req| {
         let config_clone = config_clone.clone();
-        async move { handle_request(&req, config_clone).await }
+        async move { handle_request(req, config_clone).await }
     });
 
     if let Err(err) = http1::Builder::new()
@@ -121,10 +122,10 @@ async fn handle_connection(config: Arc<Config>, stream: tokio::net::TcpStream) {
 }
 
 async fn handle_request(
-    request: &Request<impl Body>,
+    request: Request<Incoming>,
     config: Arc<Config>,
 ) -> Result<Response<BoxBody>, Infallible> {
-    let response = handlers::handle_request(&request, config).await;
+    let response = handlers::handle_request(request, config).await;
     Ok(response)
 }
 

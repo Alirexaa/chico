@@ -40,11 +40,13 @@ impl FileHandler {
 }
 
 impl RequestHandler for FileHandler {
-    async fn handle(
-        &self,
-        _request: &hyper::Request<impl hyper::body::Body>,
-    ) -> http::Response<BoxBody> {
-        let req_method = _request.method();
+    async fn handle<B>(&self, request: hyper::Request<B>) -> Response<super::BoxBody>
+    where
+        B: hyper::body::Body + Send + 'static,
+        B::Data: Send,
+        B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+    {
+        let req_method = request.method();
         if req_method != http::Method::GET && req_method != http::Method::HEAD {
             return http::response::Builder::new()
                 .status(StatusCode::METHOD_NOT_ALLOWED)
@@ -62,25 +64,25 @@ impl RequestHandler for FileHandler {
 
         let path_exist = tokio::fs::try_exists(&path).await;
 
-        if !path_exist.is_ok_and(|x| x) {
-            return handle_file_error(_request, ErrorKind::NotFound).await;
+        if !path_exist.is_ok_and(|x: bool| x) {
+            return handle_file_error(request, ErrorKind::NotFound).await;
         }
 
         let metadata = tokio::fs::metadata(&path).await;
         if metadata.is_err() {
             let err_kind = metadata.as_ref().err().unwrap().kind();
-            return handle_file_error(_request, err_kind).await;
+            return handle_file_error(request, err_kind).await;
         }
 
         let metadata = &metadata.unwrap();
         if metadata.is_dir() && !self.is_dir {
-            return handle_file_error(_request, ErrorKind::IsADirectory).await;
+            return handle_file_error(request, ErrorKind::IsADirectory).await;
         }
 
         if self.is_dir {
-            let ending = extract_ending_from_req_path(&_request.uri().path(), &self.route);
+            let ending = extract_ending_from_req_path(&request.uri().path(), &self.route);
             if ending.is_none() {
-                return handle_file_error(_request, ErrorKind::NotFound).await;
+                return handle_file_error(request, ErrorKind::NotFound).await;
             }
             path = path.join(ending.unwrap());
         };
@@ -89,17 +91,17 @@ impl RequestHandler for FileHandler {
 
         if file.is_err() {
             let err_kind = file.as_ref().err().unwrap().kind();
-            return handle_file_error(_request, err_kind).await;
+            return handle_file_error(request, err_kind).await;
         }
 
         let metadata = tokio::fs::metadata(&path).await;
         if metadata.is_err() {
             let err_kind = metadata.as_ref().err().unwrap().kind();
-            return handle_file_error(_request, err_kind).await;
+            return handle_file_error(request, err_kind).await;
         }
         let file: File = file.unwrap();
         let metadata = &metadata.unwrap();
-        process_file(_request, path.to_str().unwrap(), file, metadata).await
+        process_file(request, path.to_str().unwrap(), file, metadata).await
     }
 }
 
@@ -112,12 +114,17 @@ fn extract_ending_from_req_path(req_path: &str, route: &str) -> Option<String> {
     Some(ending.to_string())
 }
 
-async fn process_file(
-    request: &hyper::Request<impl hyper::body::Body>,
+async fn process_file<B>(
+    request: hyper::Request<B>,
     file_name: &str,
     mut file: File,
     metadata: &Metadata,
-) -> Response<http_body_util::combinators::BoxBody<bytes::Bytes, std::io::Error>> {
+) -> Response<BoxBody>
+where
+    B: hyper::body::Body + Send + 'static,
+    B::Data: Send,
+    B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+{
     let mut builder = Response::builder();
 
     let content_type = MIME_DICT.get_content_type(file_name);
@@ -187,17 +194,19 @@ async fn process_file(
     }
 }
 
-async fn handle_file_error(
-    _request: &http::Request<impl hyper::body::Body>,
-    error: ErrorKind,
-) -> Response<BoxBody> {
+async fn handle_file_error<B>(request: hyper::Request<B>, error: ErrorKind) -> Response<BoxBody>
+where
+    B: hyper::body::Body + Send + 'static,
+    B::Data: Send,
+    B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+{
     let handler = match error {
         ErrorKind::NotFound => RespondHandler::not_found(),
         ErrorKind::PermissionDenied => RespondHandler::forbidden(),
         ErrorKind::IsADirectory => RespondHandler::forbidden(),
         _ => RespondHandler::internal_server_error(),
     };
-    return handler.handle(_request).await;
+    return handler.handle(request).await;
 }
 
 /// Helper function to parse Range header
@@ -290,7 +299,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
-        let response = file_handler.handle(&request).await;
+        let response = file_handler.handle(request).await;
 
         assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(
@@ -352,7 +361,7 @@ mod tests {
             .body(request_body)
             .unwrap();
 
-        let response = file_handler.handle(&request).await;
+        let response = file_handler.handle(request).await;
 
         assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(
@@ -426,7 +435,7 @@ mod tests {
             .body(request_body)
             .unwrap();
 
-        let response = file_handler.handle(&request).await;
+        let response = file_handler.handle(request).await;
 
         assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(
@@ -479,7 +488,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
-        let response = file_handler.handle(&request).await;
+        let response = file_handler.handle(request).await;
 
         assert_eq!(&response.status(), &StatusCode::OK);
         assert_eq!(
@@ -514,7 +523,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
-        let response = file_handler.handle(&request).await;
+        let response = file_handler.handle(request).await;
 
         assert_eq!(&response.status(), &StatusCode::NOT_FOUND);
         let response_body = String::from_utf8(
@@ -540,7 +549,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
 
-        let response = file_handler.handle(&request).await;
+        let response = file_handler.handle(request).await;
 
         assert_eq!(&response.status(), &StatusCode::FORBIDDEN);
         let response_body = String::from_utf8(
@@ -566,8 +575,8 @@ mod tests {
 
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
-        let actual_response = handle_file_error(&request, error).await;
-        let expected_response = handler.handle(&request).await;
+        let actual_response = handle_file_error(request.clone(), error).await;
+        let expected_response = handler.handle(request).await;
         assert_eq!(expected_response.status(), actual_response.status());
         assert_eq!(
             expected_response
@@ -688,7 +697,7 @@ mod tests {
             .body(MockBody::new(b""))
             .unwrap();
 
-        let response = file_handler.handle(&request).await;
+        let response = file_handler.handle(request).await;
 
         assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
         assert_eq!(
@@ -719,7 +728,7 @@ mod tests {
             .body(MockBody::new(b""))
             .unwrap();
 
-        let response = file_handler.handle(&request).await;
+        let response = file_handler.handle(request).await;
 
         assert_eq!(response.status(), StatusCode::RANGE_NOT_SATISFIABLE);
         assert_eq!(
@@ -752,7 +761,7 @@ mod tests {
             .body(request_body)
             .unwrap();
 
-        let response = file_handler.handle(&request).await;
+        let response = file_handler.handle(request).await;
 
         assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
         assert_eq!(
@@ -784,7 +793,7 @@ mod tests {
             .body(request_body)
             .unwrap();
 
-        let response = file_handler.handle(&request).await;
+        let response = file_handler.handle(request).await;
 
         assert_eq!(response.status(), StatusCode::OK);
     }

@@ -1,0 +1,68 @@
+use http::{HeaderValue, Uri};
+use http_body_util::BodyExt;
+use hyper::{Request, Response};
+use hyper_util::rt::TokioIo;
+use tokio::net::TcpStream;
+
+use crate::handlers::RequestHandler;
+
+#[derive(PartialEq, Debug)]
+pub struct ReverseProxyHandler {
+    upstream: String,
+}
+
+impl ReverseProxyHandler {
+    pub fn new(upstream: String) -> Self {
+        Self { upstream }
+    }
+}
+
+impl RequestHandler for ReverseProxyHandler {
+    async fn handle<B>(&self, request: Request<B>) -> Response<super::BoxBody>
+    where
+        B: hyper::body::Body + Send + 'static,
+        B::Data: Send,
+        B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+    {
+        let client_stream = TcpStream::connect(&self.upstream).await.unwrap();
+        let io = TokioIo::new(client_stream);
+
+        let (mut sender, conn) = hyper::client::conn::http1::handshake(io).await.unwrap();
+
+        tokio::task::spawn(async move {
+            if let Err(err) = conn.await {
+                println!("Connection failed: {:?}", err);
+            }
+        });
+
+        let uri_string = format!(
+            "http://{}{}",
+            &self.upstream,
+            request
+                .uri()
+                .path_and_query()
+                .map(|x| x.as_str())
+                .unwrap_or("/")
+        );
+
+        // let (parts, body) = request.into_parts();
+        // let mut forward_request = Request::from_parts(parts, body);
+        let mut request = request;
+        let uri = uri_string.parse::<Uri>().unwrap();
+        let host_header = format!("{}:{}", &uri.host().unwrap(), &uri.port().unwrap());
+        request.headers_mut().insert(
+            http::header::HOST,
+            HeaderValue::from_str(host_header.as_str()).unwrap(),
+        );
+        *request.uri_mut() = uri;
+
+        let response = sender.send_request(request).await.unwrap();
+
+        let (parts, body) = response.into_parts();
+        let boxed_body = body
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+            .boxed();
+
+        Response::from_parts(parts, boxed_body)
+    }
+}

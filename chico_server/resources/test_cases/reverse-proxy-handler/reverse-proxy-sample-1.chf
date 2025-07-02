@@ -1,0 +1,5 @@
+localhost:4000 {
+    route /* {
+        proxy localhost:29320
+    }
+}

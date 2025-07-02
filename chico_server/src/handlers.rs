@@ -1,13 +1,13 @@
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
-use crate::{config::ConfigExt, uri::UriExt, virtual_host::VirtualHostExt};
+use crate::{
+    config::ConfigExt, handlers::reverse_proxy::ReverseProxyHandler, uri::UriExt,
+    virtual_host::VirtualHostExt,
+};
 use chico_file::types::Config;
 use file::FileHandler;
-use http::Uri;
-use hyper::{
-    body::{Body, Bytes},
-    Response,
-};
+use http::{Request, Uri};
+use hyper::{body::Bytes, Response};
 use redirect::RedirectHandler;
 use respond::RespondHandler;
 pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, std::io::Error>;
@@ -15,17 +15,23 @@ pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, std::io::Error>;
 mod file;
 mod redirect;
 mod respond;
+mod reverse_proxy;
 pub trait RequestHandler {
-    async fn handle(&self, _request: &hyper::Request<impl Body>) -> Response<BoxBody>;
+    async fn handle<B>(&self, request: Request<B>) -> Response<BoxBody>
+    where
+        B: hyper::body::Body + Send + 'static,
+        B::Data: Send,
+        B::Error: Into<Box<dyn std::error::Error + Send + Sync>>;
 }
 
 #[allow(dead_code)]
-pub async fn handle_request(
-    request: &hyper::Request<impl Body>,
-    config: Arc<Config>,
-) -> Response<BoxBody> {
+pub async fn handle_request<B>(request: hyper::Request<B>, config: Arc<Config>) -> Response<BoxBody>
+where
+    B: hyper::body::Body + Send + 'static,
+    B::Data: Send,
+    B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+{
     let host = request.headers().get(http::header::HOST);
-
     if host.is_none() {
         return UtilitiesResponses::bad_request_host_header_not_found_respond_handler()
             .handle(request)
@@ -97,6 +103,11 @@ pub async fn handle_request(
             }
             .handle(request)
             .await
+        }
+        chico_file::types::Handler::Proxy(upstream) => {
+            ReverseProxyHandler::new(upstream.clone())
+                .handle(request)
+                .await
         }
         _ => todo!(),
     };
@@ -179,7 +190,7 @@ mod tests {
             .body(MockBody::new(b""))
             .unwrap();
 
-        let response = handle_request(&request, Arc::new(config)).await;
+        let response = handle_request(request, Arc::new(config)).await;
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
         let response_body = String::from_utf8(
@@ -223,7 +234,7 @@ mod tests {
             .body(MockBody::new(b""))
             .unwrap();
 
-        let response = handle_request(&request, Arc::new(config)).await;
+        let response = handle_request(request, Arc::new(config)).await;
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
         assert_some!(
@@ -271,7 +282,7 @@ mod tests {
             .body(MockBody::new(b""))
             .unwrap();
 
-        let response = handle_request(&request, Arc::new(config)).await;
+        let response = handle_request(request, Arc::new(config)).await;
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         let response_body = String::from_utf8(
@@ -313,7 +324,7 @@ mod tests {
             .body(MockBody::new(b""))
             .unwrap();
 
-        let response = handle_request(&request, Arc::new(config)).await;
+        let response = handle_request(request, Arc::new(config)).await;
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         let response_body = String::from_utf8(
