@@ -18,7 +18,7 @@ async fn main() -> ExitCode {
         .target(env_logger::Target::Stdout)
         .init();
 
-    let cli = cli::CLI::parse();
+    let cli = cli::Cli::parse();
     match cli.command {
         cli::Commands::Run { config } => {
             let result = validate_config_file(config.as_str()).await;

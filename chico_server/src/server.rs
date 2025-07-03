@@ -72,7 +72,7 @@ async fn handle_listener(
     config: Arc<Config>,
     listener: TcpListener,
     shutdown: &mut broadcast::Receiver<()>,
-) -> () {
+) {
     loop {
         select! {
             res = listener.accept() => {
@@ -124,7 +124,7 @@ async fn handle_request(
     request: &Request<impl Body>,
     config: Arc<Config>,
 ) -> Result<Response<BoxBody>, Infallible> {
-    let response = handlers::handle_request(&request, config).await;
+    let response = handlers::handle_request(request, config).await;
     Ok(response)
 }
 

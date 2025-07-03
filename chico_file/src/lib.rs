@@ -147,7 +147,7 @@ fn parse_middleware(input: &str) -> IResult<&str, types::Middleware> {
 fn parse_rate_limit(input: &str) -> IResult<&str, types::Middleware> {
     let (input, _) = tag("rate_limit")(input)?;
     let (input, _) = space1(input)?;
-    let (input, num) = take_while1(|c: char| c.is_digit(10))(input)?;
+    let (input, num) = take_while1(|c: char| c.is_ascii_digit())(input)?;
     Ok((input, types::Middleware::RateLimit(num.parse().unwrap())))
 }
 
@@ -859,7 +859,7 @@ mod tests {
                 Ok((
                     "",
                     types::Middleware::Header {
-                        operator: operator,
+                        operator,
                         name: name.to_string(),
                         value: value.map(|s| s.to_string()),
                         replace_with: replace_with.map(|s| s.to_string()),

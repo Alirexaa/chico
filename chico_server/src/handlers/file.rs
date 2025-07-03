@@ -20,7 +20,7 @@ use crate::handlers::respond::RespondHandler;
 use super::{full, BoxBody, RequestHandler};
 
 static MIME_DICT: std::sync::LazyLock<mimee::MimeDict> =
-    std::sync::LazyLock::new(|| mimee::MimeDict::new());
+    std::sync::LazyLock::new(mimee::MimeDict::new);
 
 #[derive(PartialEq, Debug)]
 pub struct FileHandler {
@@ -78,7 +78,7 @@ impl RequestHandler for FileHandler {
         }
 
         if self.is_dir {
-            let ending = extract_ending_from_req_path(&_request.uri().path(), &self.route);
+            let ending = extract_ending_from_req_path(_request.uri().path(), &self.route);
             if ending.is_none() {
                 return handle_file_error(_request, ErrorKind::NotFound).await;
             }
@@ -167,7 +167,8 @@ async fn process_file(
         let stream = ReaderStream::new(file.take(content_length));
         let stream_body = StreamBody::new(stream.map_ok(Frame::data));
         let boxed_body = stream_body.boxed();
-        let response = builder
+
+        builder
             .status(StatusCode::PARTIAL_CONTENT)
             .header(http::header::CONTENT_LENGTH, content_length)
             .header(
@@ -175,15 +176,13 @@ async fn process_file(
                 format!("bytes {}-{}/{}", start, end, file_size),
             )
             .body(boxed_body)
-            .unwrap();
-        response
+            .unwrap()
     } else {
         let reader_stream = ReaderStream::new(file);
         let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
         let boxed_body = stream_body.boxed();
 
-        let response = builder.status(StatusCode::OK).body(boxed_body).unwrap();
-        response
+        builder.status(StatusCode::OK).body(boxed_body).unwrap()
     }
 }
 
@@ -408,7 +407,7 @@ mod tests {
         let content = r"Hello world!!!";
         println!("{:?}", file_path);
         std::fs::create_dir_all(dir).expect("Expected to create directories");
-        let mut file = File::create(&file_path).unwrap();
+        let mut file = File::create(file_path).unwrap();
         file.write_all(content.as_bytes()).unwrap();
 
         // This is file handler for following config
@@ -600,7 +599,7 @@ mod tests {
         #[case] req_path: &str,
         #[case] ending: &str,
     ) {
-        let result = extract_ending_from_req_path(req_path, &route);
+        let result = extract_ending_from_req_path(req_path, route);
         assert_eq!(ending.to_string(), result.unwrap());
     }
 
