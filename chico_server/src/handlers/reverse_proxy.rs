@@ -55,15 +55,15 @@ impl RequestHandler for ReverseProxyHandler {
             debug!("connection complated");
         });
 
-        let uri_string = format!(
-            "http://{}{}",
-            &self.upstream,
-            request
-                .uri()
-                .path_and_query()
-                .map(|x| x.as_str())
-                .unwrap_or("/")
-        );
+        let scheme = "http";
+        let host_port = &self.upstream;
+        let path_and_query = request
+            .uri()
+            .path_and_query()
+            .map(|x| x.as_str())
+            .unwrap_or("/");
+
+        let uri_string = format!("{scheme}://{host_port}{path_and_query}");
 
         // let (parts, body) = request.into_parts();
         // let mut forward_request = Request::from_parts(parts, body);
