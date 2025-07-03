@@ -859,7 +859,7 @@ mod tests {
                 Ok((
                     "",
                     types::Middleware::Header {
-                        operator: operator,
+                        operator,
                         name: name.to_string(),
                         value: value.map(|s| s.to_string()),
                         replace_with: replace_with.map(|s| s.to_string()),

@@ -100,9 +100,7 @@ impl RequestHandler for RespondHandler {
             builder = builder.header(key, value);
         }
 
-        let response = builder.body(full(body)).unwrap();
-
-        response
+        builder.body(full(body)).unwrap()
     }
 }
 
