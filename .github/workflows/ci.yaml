@@ -10,48 +10,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  format:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    
-    - name: Cache rust cargo artifacts
-      uses: Swatinem/rust-cache@v2
-    
-    - name: Check formatting
-      run: |
-        cargo fmt --check
-        if [ $? -ne 0 ]; then
-          echo "❌ Code formatting issues found!"
-          echo "💡 To fix formatting issues, run: cargo fmt"
-          echo "📝 Then commit the changes to fix the CI failure."
-          exit 1
-        else
-          echo "✅ Code formatting is correct!"
-        fi
-
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-    
-    - name: Cache rust cargo artifacts
-      uses: Swatinem/rust-cache@v2
-    
-    - name: Run clippy
-      run: |
-        cargo clippy --all-targets --all-features -- -D warnings
-        if [ $? -ne 0 ]; then
-          echo "❌ Clippy found issues that need to be fixed!"
-          echo "💡 To fix clippy issues, run: cargo clippy --all-targets --all-features -- -D warnings"
-          echo "📝 Address all the warnings/errors and commit the changes to fix the CI failure."
-          exit 1
-        else
-          echo "✅ No clippy issues found!"
-        fi
-
   build:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -64,6 +22,30 @@ jobs:
 
     - name: Cache rust cargo artifacts
       uses: Swatinem/rust-cache@v2
+
+    - name: Check formatting
+      run: |
+        cargo fmt --check
+        if [ $? -ne 0 ]; then
+          echo "❌ Code formatting issues found!"
+          echo "💡 To fix formatting issues, run: cargo fmt"
+          echo "📝 Then commit the changes to fix the CI failure."
+          exit 1
+        else
+          echo "✅ Code formatting is correct!"
+        fi
+
+    - name: Run clippy
+      run: |
+        cargo clippy --all-targets --all-features -- -D warnings
+        if [ $? -ne 0 ]; then
+          echo "❌ Clippy found issues that need to be fixed!"
+          echo "💡 To fix clippy issues, run: cargo clippy --all-targets --all-features -- -D warnings"
+          echo "📝 Address all the warnings/errors and commit the changes to fix the CI failure."
+          exit 1
+        else
+          echo "✅ No clippy issues found!"
+        fi
 
     - name: Install nextest
       uses: taiki-e/install-action@nextest
