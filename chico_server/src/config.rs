@@ -43,9 +43,7 @@ pub(crate) async fn validate_config_file(path: &str) -> Result<Config, String> {
 
 fn parse_with_validate(content: &str) -> Result<Config, String> {
     if content.is_empty() {
-        return Err(format!(
-            "Failed to parse content. reason: content is empty."
-        ));
+        return Err("Failed to parse content. reason: content is empty.".to_string());
     }
 
     let parse_result = parse_config(content);
@@ -61,9 +59,7 @@ fn parse_with_validate(content: &str) -> Result<Config, String> {
     let virtual_hosts = &config.virtual_hosts;
 
     if virtual_hosts.is_empty() {
-        return Err(format!(
-            "Failed to parse config file. reason: no virtual hosts found."
-        ));
+        return Err("Failed to parse config file. reason: no virtual hosts found.".to_string());
     }
 
     // any logical validation like checking for duplicate domains, routes, etc.
@@ -355,10 +351,10 @@ mod tests {
 
         let (_, config) = parse_config(content).unwrap();
         let ports = config.get_ports();
-        assert!(ports.iter().any(|p| *p == 3000));
-        assert!(ports.iter().any(|p| *p == 80));
-        assert!(ports.iter().any(|p| *p == 8080));
-        assert!(ports.iter().any(|p| *p == 443));
+        assert!(ports.contains(&3000));
+        assert!(ports.contains(&80));
+        assert!(ports.contains(&8080));
+        assert!(ports.contains(&443));
     }
 
     #[tokio::test]
@@ -393,6 +389,6 @@ mod tests {
     async fn test_get_ports_when_ports_not_specified(#[case] content: &str, #[case] port: u16) {
         let (_, config) = parse_config(content).unwrap();
         let ports = config.get_ports();
-        assert!(ports.iter().any(|p| *p == port));
+        assert!(ports.contains(&port));
     }
 }

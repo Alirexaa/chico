@@ -84,7 +84,7 @@ where
 
     let route = route.unwrap();
 
-    let response = match &route.handler {
+    match &route.handler {
         chico_file::types::Handler::File(path) => {
             FileHandler::new(path.clone(), route.path.clone())
                 .handle(request)
@@ -113,9 +113,7 @@ where
                 .await
         }
         _ => todo!(),
-    };
-
-    response
+    }
 }
 
 pub fn full<T: Into<Bytes>>(chunk: T) -> BoxBody {

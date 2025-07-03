@@ -2,7 +2,7 @@ use clap::{command, Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "chico")]
-pub(crate) struct CLI {
+pub(crate) struct Cli {
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -27,14 +27,14 @@ mod tests {
     use clap::Parser;
     use rstest::rstest;
 
-    use super::{Commands, CLI};
+    use super::{Cli, Commands};
 
     #[rstest]
     #[case("-c")]
     #[case("--config")]
     fn test_validate_command_parsing(#[case] arg: &str) {
         let args = vec!["chico", "validate", arg, "/path/to/file"];
-        let cli = CLI::try_parse_from(args).unwrap();
+        let cli = Cli::try_parse_from(args).unwrap();
         // Match the parsed command
 
         match cli.command {
@@ -48,7 +48,7 @@ mod tests {
     #[case("--config")]
     fn test_run_command_parsing(#[case] arg: &str) {
         let args = vec!["chico", "run", arg, "/path/to/file"];
-        let cli = CLI::try_parse_from(args).unwrap();
+        let cli = Cli::try_parse_from(args).unwrap();
         // Match the parsed command
 
         match cli.command {

@@ -15,7 +15,7 @@ mod virtual_host;
 async fn main() -> ExitCode {
     crates_tracing::init("chico.log".to_string(), "chico".to_string());
 
-    let cli = cli::CLI::parse();
+    let cli = cli::Cli::parse();
     match cli.command {
         cli::Commands::Run { config } => {
             let result = validate_config_file(config.as_str()).await;

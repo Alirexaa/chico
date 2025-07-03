@@ -57,11 +57,9 @@ impl ServerFixture {
     ) {
         let reader = BufReader::new(stream);
         thread::spawn(move || {
-            for line in reader.lines() {
-                if let Ok(line) = line {
-                    println!("[{}] {}", label, line); // Print logs
-                    let _ = sender.send(line); // Send log to channel
-                }
+            for line in reader.lines().map_while(Result::ok) {
+                println!("[{}] {}", label, line); // Print logs
+                let _ = sender.send(line); // Send log to channel
             }
         });
     }
@@ -340,7 +338,7 @@ mod serial_integration {
         let content = r"Hello World!!!";
 
         std::fs::create_dir_all(dir).expect("Expected to create directories");
-        let mut file = File::create(&file_path).unwrap();
+        let mut file = File::create(file_path).unwrap();
         file.write_all(content.as_bytes()).unwrap();
 
         app.wait_for_start();

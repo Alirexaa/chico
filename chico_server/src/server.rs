@@ -73,7 +73,7 @@ async fn handle_listener(
     config: Arc<Config>,
     listener: TcpListener,
     shutdown: &mut broadcast::Receiver<()>,
-) -> () {
+) {
     loop {
         let span = info_span!("listener.accept.loop");
         let _guard = span.enter();
