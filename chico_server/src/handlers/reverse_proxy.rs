@@ -5,7 +5,7 @@ use hyper_util::rt::TokioIo;
 use tokio::net::TcpStream;
 use tracing::{debug, error, info_span};
 
-use crate::handlers::RequestHandler;
+use crate::handlers::{respond::RespondHandler, RequestHandler};
 
 #[derive(PartialEq, Debug)]
 pub struct ReverseProxyHandler {
@@ -28,7 +28,18 @@ impl RequestHandler for ReverseProxyHandler {
         let span = info_span!("my_span");
         let _guard = span.enter();
         debug!("start connect to upstream");
-        let client_stream = TcpStream::connect(&self.upstream).await.unwrap();
+        let connect_result = TcpStream::connect(&self.upstream).await;
+
+        let Ok(client_stream) = connect_result else {
+            let err = connect_result.err().unwrap();
+            error!("could not connect to upstream server. Given upstream : {upstream} - Error : {error}" , upstream  = &self.upstream, error= err);
+            return RespondHandler::bad_gateway_with_body(
+                "502 Bad Gateway - could not connect to upstream server.".to_string(),
+            )
+            .handle(request)
+            .await;
+        };
+
         let io = TokioIo::new(client_stream);
         debug!("connected to upstream");
 

@@ -88,6 +88,16 @@ impl RespondHandler {
     pub fn range_not_satisfiable() -> RespondHandler {
         RespondHandler::new(416, None)
     }
+
+    #[allow(dead_code)]
+    pub fn bad_gateway() -> RespondHandler {
+        RespondHandler::new(416, None)
+    }
+
+    #[allow(dead_code)]
+    pub fn bad_gateway_with_body(body: String) -> RespondHandler {
+        RespondHandler::new(502, Some(body))
+    }
 }
 
 impl RequestHandler for RespondHandler {
