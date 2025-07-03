@@ -84,9 +84,7 @@ impl RequestHandler for ReverseProxyHandler {
         debug!("start converting response");
 
         let (parts, body) = response.into_parts();
-        let boxed_body = body
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-            .boxed();
+        let boxed_body = body.map_err(|e| std::io::Error::other(e)).boxed();
         debug!("response boxed");
 
         Response::from_parts(parts, boxed_body)
