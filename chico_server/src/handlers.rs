@@ -77,7 +77,7 @@ pub async fn handle_request(
 
     let route = route.unwrap();
 
-    let response = match &route.handler {
+    match &route.handler {
         chico_file::types::Handler::File(path) => {
             FileHandler::new(path.clone(), route.path.clone())
                 .handle(request)
@@ -99,9 +99,7 @@ pub async fn handle_request(
             .await
         }
         _ => todo!(),
-    };
-
-    response
+    }
 }
 
 pub fn full<T: Into<Bytes>>(chunk: T) -> BoxBody {

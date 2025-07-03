@@ -167,7 +167,8 @@ async fn process_file(
         let stream = ReaderStream::new(file.take(content_length));
         let stream_body = StreamBody::new(stream.map_ok(Frame::data));
         let boxed_body = stream_body.boxed();
-        let response = builder
+
+        builder
             .status(StatusCode::PARTIAL_CONTENT)
             .header(http::header::CONTENT_LENGTH, content_length)
             .header(
@@ -175,8 +176,7 @@ async fn process_file(
                 format!("bytes {}-{}/{}", start, end, file_size),
             )
             .body(boxed_body)
-            .unwrap();
-        response
+            .unwrap()
     } else {
         let reader_stream = ReaderStream::new(file);
         let stream_body = StreamBody::new(reader_stream.map_ok(Frame::data));
