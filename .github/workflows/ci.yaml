@@ -21,7 +21,7 @@ jobs:
     
     - name: Check formatting
       run: |
-        cargo fmt -- --check
+        cargo fmt --check
         if [ $? -ne 0 ]; then
           echo "❌ Code formatting issues found!"
           echo "💡 To fix formatting issues, run: cargo fmt"
