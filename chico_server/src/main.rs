@@ -2,7 +2,11 @@
 use clap::Parser;
 use config::validate_config_file;
 use server::run_server;
-use std::process::ExitCode;
+use std::{process::ExitCode, sync::Arc};
+use tokio::{
+    io::{AsyncBufReadExt, BufReader},
+    select,
+};
 mod cli;
 mod config;
 mod handlers;
@@ -24,7 +28,35 @@ async fn main() -> ExitCode {
                 eprintln!("{}", result.err().unwrap());
                 return ExitCode::FAILURE;
             };
-            run_server(conf).await;
+            let server = async {
+                run_server(conf).await;
+            };
+
+            let notify = Arc::new(tokio::sync::Notify::new());
+            let notify_clone = notify.clone();
+            tokio::spawn(async move {
+                let stdin = tokio::io::stdin();
+                let mut reader = BufReader::new(stdin).lines();
+
+                while let Ok(Some(line)) = reader.next_line().await {
+                    println!("hhhhhhhhhh.");
+
+                    if line.trim() == "shutdown" {
+                        println!("Shutdown command received from stdin.");
+                        notify_clone.notify_waiters();
+                        break;
+                    }
+                }
+            });
+            println!("sssssssss");
+
+            let shutdown = async { notify.notified().await };
+            println!("ttttttt");
+
+            select! {
+                _ = server => {}
+                _ = shutdown => {}
+            }
             return ExitCode::SUCCESS;
         }
         cli::Commands::Validate { config } => {
