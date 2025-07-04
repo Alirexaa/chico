@@ -1,9 +1,9 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
 
 use std::{
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Write},
     path::Path,
-    process::Stdio,
+    process::{ChildStdin, Stdio},
     sync::mpsc,
     thread,
 };
@@ -13,6 +13,8 @@ pub(crate) struct ServerFixture {
     executing_dir: String,
     exe_path: String,
     log_receiver: mpsc::Receiver<String>, // Store logs for `wait_for_text`
+    has_shutdown: bool,
+    stdin: ChildStdin,
 }
 
 impl ServerFixture {
@@ -25,12 +27,14 @@ impl ServerFixture {
             .arg("--config")
             .arg(config_path)
             .stdout(Stdio::piped())
+            .stdin(Stdio::piped())
             .stderr(Stdio::piped());
 
         let mut process = command.spawn().expect("Failed to start server");
 
         let stdout = process.stdout.take().expect("Failed to capture stdout");
         let stderr = process.stderr.take().expect("Failed to capture stderr");
+        let stdin = process.stdin.take().expect("Failed to capture stdin");
 
         // Create channel for log forwarding
         let (log_sender, log_receiver) = mpsc::channel();
@@ -47,6 +51,8 @@ impl ServerFixture {
             executing_dir,
             exe_path,
             log_receiver,
+            stdin,
+            has_shutdown: false,
         }
     }
 
@@ -65,15 +71,47 @@ impl ServerFixture {
     }
 
     pub fn stop_app(&mut self) {
-        // Attempt to kill the process gracefully
-        if let Err(e) = self.process.kill() {
-            eprintln!("Failed to kill server process: {}", e);
+        if self.has_shutdown {
+            println!("Server already shut down, skipping stop_app.");
+            return;
         }
 
-        // Wait for the process to exit, regardless of whether kill succeeded
+        match self.process.try_wait() {
+            Ok(Some(status)) => {
+                println!("Process already exited with: {}", status);
+                self.has_shutdown = true;
+                return;
+            }
+            Ok(None) => {
+                // still running
+            }
+            Err(e) => {
+                eprintln!("Failed to check process status: {}", e);
+                return;
+            }
+        }
+
+        match self.stdin.write_all(b"shutdown\n") {
+            Ok(_) => {
+                println!("shutdown command sent");
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {
+                eprintln!("Broken pipe: stdin already closed");
+            }
+            Err(e) => {
+                eprintln!("Failed to write to stdin: {}", e);
+            }
+        }
+
+        if let Err(e) = self.stdin.flush() {
+            eprintln!("Failed to flush stdin: {}", e);
+        }
+
         if let Err(e) = self.process.wait() {
             eprintln!("Failed to wait for server process: {}", e);
         }
+
+        self.has_shutdown = true; // Mark as shut down
     }
 
     pub fn wait_for_text(&mut self, text: &str) {
