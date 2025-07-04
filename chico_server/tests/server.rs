@@ -27,7 +27,7 @@ impl ServerFixture {
             .arg("--config")
             .arg(config_path)
             .stdout(Stdio::piped())
-            .stdout(Stdio::piped())
+            .stdin(Stdio::piped())
             .stderr(Stdio::piped());
 
         let mut process = command.spawn().expect("Failed to start server");
