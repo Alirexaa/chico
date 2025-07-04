@@ -3,10 +3,8 @@ use clap::Parser;
 use config::validate_config_file;
 use server::run_server;
 use std::{process::ExitCode, sync::Arc};
-use tokio::{
-    io::{AsyncBufReadExt, BufReader},
-    select,
-};
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::select;
 mod cli;
 mod config;
 mod handlers;
@@ -39,8 +37,6 @@ async fn main() -> ExitCode {
                 let mut reader = BufReader::new(stdin).lines();
 
                 while let Ok(Some(line)) = reader.next_line().await {
-                    println!("hhhhhhhhhh.");
-
                     if line.trim() == "shutdown" {
                         println!("Shutdown command received from stdin.");
                         notify_clone.notify_waiters();
@@ -48,10 +44,8 @@ async fn main() -> ExitCode {
                     }
                 }
             });
-            println!("sssssssss");
 
             let shutdown = async { notify.notified().await };
-            println!("ttttttt");
 
             select! {
                 _ = server => {}

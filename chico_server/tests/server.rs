@@ -13,8 +13,8 @@ pub(crate) struct ServerFixture {
     executing_dir: String,
     exe_path: String,
     log_receiver: mpsc::Receiver<String>, // Store logs for `wait_for_text`
-    stdin: ChildStdin,
     has_shutdown: bool,
+    stdin: ChildStdin,
 }
 
 impl ServerFixture {
@@ -28,6 +28,7 @@ impl ServerFixture {
             .arg(config_path)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
+            .stdin(Stdio::piped())
             .stderr(Stdio::piped());
 
         let mut process = command.spawn().expect("Failed to start server");
@@ -74,8 +75,6 @@ impl ServerFixture {
             println!("Server already shut down, skipping stop_app.");
             return;
         }
-
-        println!("stoppppppp");
 
         match self.process.try_wait() {
             Ok(Some(status)) => {
