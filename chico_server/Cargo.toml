@@ -19,8 +19,8 @@ tokio-util = "0.7.15"
 mimee = { version = "0.2"}
 futures-util = { version = "0.3", default-features = false }
 bytes = "1"
-env_logger = "0.11.8"
-log = "0.4.27"
+crates_tracing = { version = "0.1.0", path = "../crates_tracing" }
+tracing = { version = "0.1.41" }
 
 [dev-dependencies]
 rstest = "0.25.0"
