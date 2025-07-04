@@ -608,4 +608,34 @@ mod serial_integration {
         app.stop_app();
         _ = std::fs::remove_file(file_path);
     }
+
+    #[tokio::test]
+    async fn test_reverse_proxy_handler_proxied_request() {
+        let config_file_path =
+            Path::new("resources/test_cases/reverse-proxy-handler/reverse-proxy-sample-1.chf");
+        assert!(config_file_path.exists());
+
+        let mut app = ServerFixture::run_app(config_file_path);
+
+        let file_path = Path::new(app.get_executing_dir()).join("test.txt");
+
+        let content = b"Hello, this is a test file content!";
+        let mut file = File::create(&file_path).unwrap();
+        file.write_all(content).unwrap();
+
+        app.wait_for_start();
+
+        let response = reqwest::Client::new()
+            .get("http://127.0.0.1:4000")
+            .send()
+            .await;
+
+        // Cleanup resources before assertion
+        app.stop_app();
+        _ = std::fs::remove_file(file_path);
+
+        let response = response.unwrap();
+        assert_eq!(&response.status(), &StatusCode::OK);
+        assert_eq!(response.text().await.unwrap(), "Hello");
+    }
 }
