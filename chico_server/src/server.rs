@@ -131,9 +131,56 @@ async fn handle_request(
     Ok(response)
 }
 
-async fn shutdown_signal() {
-    // Wait for the CTRL+C signal
-    tokio::signal::ctrl_c()
-        .await
-        .expect("failed to install CTRL+C signal handler");
+// async fn shutdown_signal() {
+//     // Wait for the CTRL+C signal
+//     tokio::signal::ctrl_c()
+//         .await
+//         .expect("failed to install CTRL+C signal handler");
+// }
+
+pub async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        let interrupt = async {
+            signal(SignalKind::interrupt())
+                .expect("failed to install 'interrupt' signal handler")
+                .recv()
+                .await;
+        };
+
+        let terminate = async {
+            signal(SignalKind::terminate())
+                .expect("failed to install 'terminate' signal handler")
+                .recv()
+                .await;
+        };
+
+        tokio::select! {
+            _ = interrupt => {},
+            _ = terminate => {},
+        }
+    }
+    #[cfg(windows)]
+    {
+        use tokio::signal::windows::{ctrl_c, ctrl_shutdown};
+        let interrupt = async {
+            ctrl_c()
+                .expect("failed to install 'ctrl-c' signal handler")
+                .recv()
+                .await;
+        };
+
+        let terminate = async {
+            ctrl_shutdown()
+                .expect("failed to install 'ctrl_shutdown' signal handler")
+                .recv()
+                .await;
+        };
+
+        tokio::select! {
+            _ = interrupt => {},
+            _ = terminate => {},
+        }
+    }
 }
