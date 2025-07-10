@@ -32,7 +32,7 @@ async fn main() -> ExitCode {
             };
 
             // listen to shutdown from stdio only in tests https://github.com/Alirexaa/chico/issues/99
-            #[cfg(test)]
+            #[cfg(feature = "stdin_shutdown")]
             {
                 use std::sync::Arc;
                 use tokio::select;
@@ -61,7 +61,7 @@ async fn main() -> ExitCode {
                     _ = shutdown => {}
                 }
             }
-            #[cfg(not(test))]
+            #[cfg(not(feature = "stdin_shutdown"))]
             server.await;
 
             return ExitCode::SUCCESS;
