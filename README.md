@@ -88,7 +88,7 @@ localhost {
 To run the tests, use the following command:
 
 ```sh
-cargo test
+cargo test --all-features
 ```
 
 ### License
