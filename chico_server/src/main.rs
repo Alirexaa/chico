@@ -2,9 +2,7 @@
 use clap::Parser;
 use config::validate_config_file;
 use server::run_server;
-use std::{process::ExitCode, sync::Arc};
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::select;
+use std::process::ExitCode;
 mod cli;
 mod config;
 mod handlers;
@@ -30,27 +28,39 @@ async fn main() -> ExitCode {
                 run_server(conf).await;
             };
 
-            let notify = Arc::new(tokio::sync::Notify::new());
-            let notify_clone = notify.clone();
-            tokio::spawn(async move {
-                let stdin = tokio::io::stdin();
-                let mut reader = BufReader::new(stdin).lines();
+            // listen to shutdown from stdio only in tests https://github.com/Alirexaa/chico/issues/99
+            #[cfg(feature = "stdin_shutdown")]
+            {
+                use std::sync::Arc;
+                use tokio::select;
 
-                while let Ok(Some(line)) = reader.next_line().await {
-                    if line.trim() == "shutdown" {
-                        println!("Shutdown command received from stdin.");
-                        notify_clone.notify_waiters();
-                        break;
+                let notify = Arc::new(tokio::sync::Notify::new());
+                let notify_clone = notify.clone();
+                tokio::spawn(async move {
+                    use tokio::io::{AsyncBufReadExt, BufReader};
+
+                    let stdin = tokio::io::stdin();
+                    let mut reader = BufReader::new(stdin).lines();
+
+                    while let Ok(Some(line)) = reader.next_line().await {
+                        if line.trim() == "shutdown" {
+                            println!("Shutdown command received from stdin.");
+                            notify_clone.notify_waiters();
+                            break;
+                        }
                     }
+                });
+
+                let shutdown = async { notify.notified().await };
+
+                select! {
+                    _ = server => {}
+                    _ = shutdown => {}
                 }
-            });
-
-            let shutdown = async { notify.notified().await };
-
-            select! {
-                _ = server => {}
-                _ = shutdown => {}
             }
+            #[cfg(not(feature = "stdin_shutdown"))]
+            server.await;
+
             return ExitCode::SUCCESS;
         }
         cli::Commands::Validate { config } => {

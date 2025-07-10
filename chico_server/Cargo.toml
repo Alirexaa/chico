@@ -38,6 +38,7 @@ workspace = true
 # Treat warnings as a build error.
 strict = []
 default = ["strict"] 
+stdin_shutdown = []
 
 [[bin]]
 name = "chico"
