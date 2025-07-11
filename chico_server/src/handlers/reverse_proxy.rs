@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use http::{HeaderValue, Uri};
 use http_body_util::BodyExt;
 use hyper::{Request, Response};
@@ -5,7 +7,7 @@ use hyper_util::rt::TokioIo;
 use tokio::net::TcpStream;
 use tracing::{debug, error, info_span};
 
-use crate::handlers::{respond::RespondHandler, RequestHandler};
+use crate::handlers::{respond::RespondHandler, BoxBody, RequestHandler};
 
 #[derive(PartialEq, Debug)]
 pub struct ReverseProxyHandler {
@@ -65,8 +67,6 @@ impl RequestHandler for ReverseProxyHandler {
 
         let uri_string = format!("{scheme}://{host_port}{path_and_query}");
 
-        // let (parts, body) = request.into_parts();
-        // let mut forward_request = Request::from_parts(parts, body);
         let mut request = request;
         let uri = uri_string.parse::<Uri>().unwrap();
         let host_header = format!("{}:{}", &uri.host().unwrap(), &uri.port().unwrap());
@@ -78,7 +78,24 @@ impl RequestHandler for ReverseProxyHandler {
 
         debug!("start sending request");
 
-        let response = sender.send_request(request).await.unwrap();
+        let timeout = Duration::from_secs(5); //todo: make this configurable
+        let timeout_result = tokio::time::timeout(timeout, sender.send_request(request)).await;
+
+        let response = match timeout_result {
+            Ok(Ok(response)) => response,
+            Ok(Err(err)) => {
+                error!("Error sending request to upstream: {:?}", err);
+                return bad_gateway_response(
+                    "502 Bad Gateway - error sending request.".to_string(),
+                );
+            }
+            Err(_) => {
+                error!("Timeout while sending request to upstream.");
+                return gateway_timeout_response(
+                    "504 Gateway Timeout - upstream did not respond in time.".to_string(),
+                );
+            }
+        };
 
         debug!("request sent");
         debug!("start converting response");
@@ -89,4 +106,18 @@ impl RequestHandler for ReverseProxyHandler {
 
         Response::from_parts(parts, boxed_body)
     }
+}
+
+fn bad_gateway_response(body: String) -> Response<BoxBody> {
+    http::Response::builder()
+        .status(502)
+        .body(crate::handlers::full(body))
+        .unwrap()
+}
+
+fn gateway_timeout_response(body: String) -> Response<BoxBody> {
+    http::Response::builder()
+        .status(504)
+        .body(crate::handlers::full(body))
+        .unwrap()
 }
