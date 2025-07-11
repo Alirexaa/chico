@@ -80,10 +80,9 @@ fn init_with_default_level(level: LevelFilter, log_file_name: String, app_name: 
 }
 
 fn create_env_filter(level: LevelFilter) -> EnvFilter {
-    let env_filter = EnvFilter::builder()
+    EnvFilter::builder()
         .with_default_directive(level.into())
-        .from_env_lossy();
-    env_filter
+        .from_env_lossy()
 }
 
 fn get_log_dir(app_name: String) -> PathBuf {
