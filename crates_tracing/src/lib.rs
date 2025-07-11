@@ -25,7 +25,7 @@ fn init_with_default_level(level: LevelFilter, log_file_name: String, app_name: 
         .with_target("hyper", LevelFilter::OFF)
         .with_target("opentelemetry_sdk", LevelFilter::OFF)
         .with_target("opentelemetry-otlp", LevelFilter::OFF);
-    // add other crates as needed
+
     let env_filter = create_env_filter(level);
 
     let stdout_layer = tracing_subscriber::fmt::layer()
@@ -59,18 +59,16 @@ fn init_with_default_level(level: LevelFilter, log_file_name: String, app_name: 
     let resource = Resource::builder()
         .with_attributes(vec![KeyValue::new("service.name", "chico")])
         .build();
-    // Create a tracer provider with the exporter
+
     let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
         .with_batch_exporter(otlp_exporter)
         .with_resource(resource)
         .build();
 
-    // Extract a tracer from the provider
     let tracer = tracer_provider.tracer("chico");
 
     let env_filter = create_env_filter(level);
 
-    // Create tracing layer with the tracer
     let telemetry = OpenTelemetryLayer::new(tracer).with_filter(env_filter);
 
     tracing_subscriber::registry()
