@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use directories::ProjectDirs;
 use opentelemetry::{trace::TracerProvider, KeyValue};
 use opentelemetry_sdk::Resource;
-use tracing::level_filters::LevelFilter;
+use tracing::{info, level_filters::LevelFilter};
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{
     filter::Targets, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer,
@@ -36,7 +36,7 @@ fn init_with_default_level(level: LevelFilter, log_file_name: String, app_name: 
         .boxed();
 
     let log_dir = get_log_dir(app_name);
-    eprintln!("logs directory {:?}", log_dir);
+    info!("logs directory {log_dir:?}");
     let file_appender = tracing_appender::rolling::daily(log_dir, log_file_name);
 
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
