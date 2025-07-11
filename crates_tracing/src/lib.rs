@@ -26,9 +26,7 @@ fn init_with_default_level(level: LevelFilter, log_file_name: String, app_name: 
         .with_target("opentelemetry_sdk", LevelFilter::OFF)
         .with_target("opentelemetry-otlp", LevelFilter::OFF);
     // add other crates as needed
-    let env_filter = EnvFilter::builder()
-        .with_default_directive(level.into())
-        .from_env_lossy();
+    let env_filter = create_env_filter(level);
 
     let stdout_layer = tracing_subscriber::fmt::layer()
         .compact()
@@ -44,9 +42,7 @@ fn init_with_default_level(level: LevelFilter, log_file_name: String, app_name: 
     // Save guard to keep the file open and Prevents drop during runtime
     Box::leak(Box::new(_guard));
 
-    let env_filter = EnvFilter::builder()
-        .with_default_directive(level.into())
-        .from_env_lossy();
+    let env_filter = create_env_filter(level);
 
     let file_layer = tracing_subscriber::fmt::layer()
         .with_ansi(false)
@@ -72,9 +68,7 @@ fn init_with_default_level(level: LevelFilter, log_file_name: String, app_name: 
     // Extract a tracer from the provider
     let tracer = tracer_provider.tracer("chico");
 
-    let env_filter = EnvFilter::builder()
-        .with_default_directive(level.into())
-        .from_env_lossy();
+    let env_filter = create_env_filter(level);
 
     // Create tracing layer with the tracer
     let telemetry = OpenTelemetryLayer::new(tracer).with_filter(env_filter);
@@ -85,6 +79,13 @@ fn init_with_default_level(level: LevelFilter, log_file_name: String, app_name: 
         .with(telemetry)
         .with(filter)
         .init();
+}
+
+fn create_env_filter(level: LevelFilter) -> EnvFilter {
+    let env_filter = EnvFilter::builder()
+        .with_default_directive(level.into())
+        .from_env_lossy();
+    env_filter
 }
 
 fn get_log_dir(app_name: String) -> PathBuf {
