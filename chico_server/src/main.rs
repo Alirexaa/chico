@@ -13,10 +13,7 @@ mod uri;
 mod virtual_host;
 #[tokio::main]
 async fn main() -> ExitCode {
-    env_logger::builder()
-        .filter_level(log::LevelFilter::Info)
-        .target(env_logger::Target::Stdout)
-        .init();
+    crates_tracing::init("chico.log".to_string(), "chico".to_string());
 
     let cli = cli::Cli::parse();
     match cli.command {

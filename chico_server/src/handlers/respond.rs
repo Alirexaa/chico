@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
 use http::Response;
-use hyper::body::Body;
 
-use super::{full, BoxBody, RequestHandler};
+use super::{full, RequestHandler};
 
 #[derive(PartialEq, Debug)]
 pub struct RespondHandler {
@@ -89,10 +88,25 @@ impl RespondHandler {
     pub fn range_not_satisfiable() -> RespondHandler {
         RespondHandler::new(416, None)
     }
+
+    #[allow(dead_code)]
+    pub fn bad_gateway() -> RespondHandler {
+        RespondHandler::new(502, None)
+    }
+
+    #[allow(dead_code)]
+    pub fn bad_gateway_with_body(body: String) -> RespondHandler {
+        RespondHandler::new(502, Some(body))
+    }
 }
 
 impl RequestHandler for RespondHandler {
-    async fn handle(&self, _request: &hyper::Request<impl Body>) -> hyper::Response<BoxBody> {
+    async fn handle<B>(&self, _request: hyper::Request<B>) -> Response<super::BoxBody>
+    where
+        B: hyper::body::Body + Send + 'static,
+        B::Data: Send,
+        B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+    {
         let body = self.body.as_ref().unwrap_or(&String::new()).clone();
 
         let mut builder = Response::builder().status(self.status);
@@ -125,7 +139,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"");
 
         let request = Request::builder().body(request_body).unwrap();
-        let response = respond_handler.handle(&request).await;
+        let response = respond_handler.handle(request).await;
 
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -152,7 +166,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"Access denied");
 
         let request = Request::builder().body(request_body).unwrap();
-        let response = respond_handler.handle(&request).await;
+        let response = respond_handler.handle(request).await;
 
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
 
@@ -183,7 +197,7 @@ mod tests {
         let request_body: MockBody = MockBody::new(b"Everything is OK");
 
         let request = Request::builder().body(request_body).unwrap();
-        let response = respond_handler.handle(&request).await;
+        let response = respond_handler.handle(request).await;
 
         assert_eq!(response.status(), StatusCode::OK);
 

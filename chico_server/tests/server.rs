@@ -69,7 +69,6 @@ impl ServerFixture {
             }
         });
     }
-
     pub fn stop_app(&mut self) {
         if self.has_shutdown {
             println!("Server already shut down, skipping stop_app.");
@@ -159,7 +158,7 @@ impl Drop for ServerFixture {
 /// We use serial_integration name to run tests (with nextest) in this module serially. We configured nextest to run these these serially. See .config/nextest.toml.
 #[serial_test::serial]
 mod serial_integration {
-    use std::{fs::File, io::Write, path::Path};
+    use std::{fs::File, io::Write, net::SocketAddr, path::Path, time::Duration};
 
     use crate::ServerFixture;
     use http::StatusCode;
@@ -645,5 +644,117 @@ mod serial_integration {
         // Cleanup resources
         app.stop_app();
         _ = std::fs::remove_file(file_path);
+    }
+
+    #[tokio::test]
+    async fn test_reverse_proxy_handler_proxied_request() {
+        let config_file_path =
+            Path::new("resources/test_cases/reverse-proxy-handler/reverse-proxy-sample-1.chf");
+        assert!(config_file_path.exists());
+
+        let mut app = ServerFixture::run_app(config_file_path);
+
+        app.wait_for_start();
+
+        let response = reqwest::Client::new()
+            .get("http://127.0.0.1:4000")
+            .send()
+            .await;
+
+        // Cleanup resources before assertion
+        app.stop_app();
+
+        let response = response.unwrap();
+        assert_eq!(&response.status(), &StatusCode::OK);
+        assert_eq!(response.text().await.unwrap(), "Hello");
+    }
+
+    async fn start_upstream_server() {
+        use axum::routing::get;
+        use axum::Router;
+        let app = Router::new()
+            .route(
+                "/api",
+                get(|| async { axum::Json(serde_json::json!({"status": "ok"})) }),
+            )
+            .route(
+                "/check-header",
+                get(
+                    async |headers: axum::http::HeaderMap| match headers.get("x-request-id") {
+                        Some(value) if value == "abc-123" => StatusCode::OK,
+                        _ => StatusCode::BAD_REQUEST,
+                    },
+                ),
+            )
+            .route(
+                "/slow",
+                get(async || {
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                    "slow"
+                }),
+            );
+
+        let addr = SocketAddr::from(([127, 0, 0, 1], 9000));
+        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+
+        tokio::spawn(async move { axum::serve::serve(listener, app).await.unwrap() });
+    }
+
+    fn start_reverse_proxy() -> ServerFixture {
+        let config_file_path =
+            Path::new("resources/test_cases/reverse-proxy-handler/reverse-proxy.chf");
+        assert!(config_file_path.exists());
+
+        ServerFixture::run_app(config_file_path)
+    }
+
+    #[tokio::test]
+    async fn test_proxy_forward_get() {
+        start_upstream_server().await;
+        let _app = start_reverse_proxy();
+
+        let resp = reqwest::get("http://localhost:8080/api").await.unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: serde_json::Value = resp.json().await.unwrap();
+        assert_eq!(body["status"], "ok");
+    }
+
+    #[tokio::test]
+    async fn test_proxy_preserves_headers() {
+        start_upstream_server().await;
+        let _app = start_reverse_proxy();
+
+        let client = reqwest::Client::new();
+
+        let resp = client
+            .get("http://localhost:8080/check-header")
+            .header("x-request-id", "abc-123")
+            .send()
+            .await
+            .unwrap();
+
+        // Cleanup resources before assertion
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_proxy_bad_gateway() {
+        // DO NOT start upstream
+        let _app = start_reverse_proxy();
+
+        let resp = reqwest::get("http://localhost:8080/missing").await.unwrap();
+
+        assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+    }
+
+    #[tokio::test]
+    async fn test_proxy_times_out() {
+        start_upstream_server().await;
+        let _app = start_reverse_proxy();
+
+        let resp = reqwest::get("http://localhost:8080/slow").await.unwrap();
+
+        assert_eq!(resp.status(), StatusCode::GATEWAY_TIMEOUT);
     }
 }
