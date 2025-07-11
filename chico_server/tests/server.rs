@@ -26,7 +26,6 @@ impl ServerFixture {
             .arg("run")
             .arg("--config")
             .arg(config_path)
-            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stdin(Stdio::piped())
             .stderr(Stdio::piped());
