@@ -41,13 +41,24 @@ impl RequestHandler for ReverseProxyHandler {
             .handle(request)
             .await;
         };
-
-        let io = TokioIo::new(client_stream);
         debug!("connected to upstream");
 
+        let io = TokioIo::new(client_stream);
+
         debug!("start handshake to upstream");
-        let (mut sender, conn) = hyper::client::conn::http1::handshake(io).await.unwrap();
-        debug!("handshaked to upstream");
+        let handshake_result = hyper::client::conn::http1::handshake(io).await;
+        let (mut sender, conn) = match handshake_result {
+            Ok(result) => result,
+            Err(err) => {
+                error!("Handshake with upstream server failed: {:?}", err);
+                return RespondHandler::bad_gateway_with_body(
+                    "502 Bad Gateway - handshake with upstream server failed.".to_string(),
+                )
+                .handle(request)
+                .await;
+            }
+        };
+        debug!("handshake-ed to upstream");
 
         tokio::task::spawn(async move {
             debug!("waiting for the connection");

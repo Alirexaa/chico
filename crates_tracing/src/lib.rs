@@ -23,8 +23,8 @@ fn init_with_default_level(level: LevelFilter, log_file_name: String, app_name: 
         .with_target("chico", level)
         .with_target("tokio", LevelFilter::OFF)
         .with_target("hyper", LevelFilter::OFF)
-        .with_target("opentelemetry_sdkyper", LevelFilter::OFF)
-        .with_target(" opentelemetry-otlp", LevelFilter::OFF);
+        .with_target("opentelemetry_sdk", LevelFilter::OFF)
+        .with_target("opentelemetry-otlp", LevelFilter::OFF);
     // add other crates as needed
     let env_filter = EnvFilter::builder()
         .with_default_directive(level.into())

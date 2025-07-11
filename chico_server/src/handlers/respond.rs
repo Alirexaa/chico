@@ -91,7 +91,7 @@ impl RespondHandler {
 
     #[allow(dead_code)]
     pub fn bad_gateway() -> RespondHandler {
-        RespondHandler::new(416, None)
+        RespondHandler::new(502, None)
     }
 
     #[allow(dead_code)]
