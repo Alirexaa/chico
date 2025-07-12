@@ -94,23 +94,7 @@ impl ServerFixture {
         #[cfg(feature = "stdin_shutdown")]
         // listen to shutdown from stdio only in tests when we want to collect code coverage https://github.com/Alirexaa/chico/issues/99
         {
-            use std::io::Write;
-
-            match self.stdin.write_all(b"shutdown\n") {
-                Ok(_) => {
-                    println!("shutdown command sent");
-                }
-                Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {
-                    eprintln!("Broken pipe: stdin already closed");
-                }
-                Err(e) => {
-                    eprintln!("Failed to write to stdin: {}", e);
-                }
-            }
-
-            if let Err(e) = self.stdin.flush() {
-                eprintln!("Failed to flush stdin: {}", e);
-            }
+            self.shutdown_via_stdin();
         }
         // we kill the process when we do not want to collect coverage, mostly in local dev when we want to run cargo test
         #[cfg(not(feature = "stdin_shutdown"))]
@@ -157,6 +141,29 @@ impl ServerFixture {
     #[allow(dead_code)]
     pub fn get_current_exe(&self) -> &String {
         &self.exe_path
+    }
+
+    #[cfg(feature = "stdin_shutdown")]
+    fn shutdown_via_stdin(&mut self) {
+        use std::io::Write;
+
+        match self.stdin.write_all(b"shutdown\n") {
+            Ok(_) => {
+                println!("shutdown command sent");
+                if let Err(e) = self.stdin.flush() {
+                    eprintln!(
+                        "Failed to flush stdin: {} - the server may not shutdown.",
+                        e
+                    );
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {
+                eprintln!("Broken pipe: stdin already closed");
+            }
+            Err(e) => {
+                eprintln!("Failed to write to stdin: {}", e);
+            }
+        }
     }
 }
 
