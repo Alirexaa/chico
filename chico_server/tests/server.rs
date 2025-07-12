@@ -1,7 +1,7 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
 
 use std::{
-    io::{BufRead, BufReader, Write},
+    io::{BufRead, BufReader},
     path::Path,
     process::{ChildStdin, Stdio},
     sync::mpsc,
@@ -14,6 +14,7 @@ pub(crate) struct ServerFixture {
     exe_path: String,
     log_receiver: mpsc::Receiver<String>, // Store logs for `wait_for_text`
     has_shutdown: bool,
+    #[allow(dead_code)]
     stdin: ChildStdin,
 }
 
@@ -90,20 +91,33 @@ impl ServerFixture {
             }
         }
 
-        match self.stdin.write_all(b"shutdown\n") {
-            Ok(_) => {
-                println!("shutdown command sent");
+        #[cfg(feature = "stdin_shutdown")]
+        // listen to shutdown from stdio only in tests when we want to collect code coverage https://github.com/Alirexaa/chico/issues/99
+        {
+            use std::io::Write;
+
+            match self.stdin.write_all(b"shutdown\n") {
+                Ok(_) => {
+                    println!("shutdown command sent");
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {
+                    eprintln!("Broken pipe: stdin already closed");
+                }
+                Err(e) => {
+                    eprintln!("Failed to write to stdin: {}", e);
+                }
             }
-            Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {
-                eprintln!("Broken pipe: stdin already closed");
-            }
-            Err(e) => {
-                eprintln!("Failed to write to stdin: {}", e);
+
+            if let Err(e) = self.stdin.flush() {
+                eprintln!("Failed to flush stdin: {}", e);
             }
         }
-
-        if let Err(e) = self.stdin.flush() {
-            eprintln!("Failed to flush stdin: {}", e);
+        // we kill the process when we do not want to collect coverage, mostly in local dev when we want to run cargo test
+        #[cfg(not(feature = "stdin_shutdown"))]
+        {
+            if let Err(e) = self.process.kill() {
+                eprintln!("Failed to kill the server process: {}", e);
+            }
         }
 
         if let Err(e) = self.process.wait() {
@@ -148,9 +162,9 @@ impl ServerFixture {
 
 impl Drop for ServerFixture {
     fn drop(&mut self) {
-        println!("Dropping ServerFixture, stopping app...");
+        println!("Stopping test server...");
         self.stop_app();
-        println!("ServerFixture dropped.");
+        println!("Test server stopped.");
     }
 }
 
@@ -711,8 +725,8 @@ mod serial_integration {
     #[tokio::test]
     async fn test_proxy_forward_get() {
         start_upstream_server().await;
-        let _app = start_reverse_proxy();
-
+        let mut app = start_reverse_proxy();
+        app.wait_for_start();
         let resp = reqwest::get("http://localhost:8080/api").await.unwrap();
 
         assert_eq!(resp.status(), StatusCode::OK);
@@ -723,7 +737,8 @@ mod serial_integration {
     #[tokio::test]
     async fn test_proxy_preserves_headers() {
         start_upstream_server().await;
-        let _app = start_reverse_proxy();
+        let mut app = start_reverse_proxy();
+        app.wait_for_start();
 
         let client = reqwest::Client::new();
 
@@ -741,7 +756,8 @@ mod serial_integration {
     #[tokio::test]
     async fn test_proxy_bad_gateway() {
         // DO NOT start upstream
-        let _app = start_reverse_proxy();
+        let mut app = start_reverse_proxy();
+        app.wait_for_start();
 
         let resp = reqwest::get("http://localhost:8080/missing").await.unwrap();
 
@@ -751,7 +767,8 @@ mod serial_integration {
     #[tokio::test]
     async fn test_proxy_times_out() {
         start_upstream_server().await;
-        let _app = start_reverse_proxy();
+        let mut app = start_reverse_proxy();
+        app.wait_for_start();
 
         let resp = reqwest::get("http://localhost:8080/slow").await.unwrap();
 
