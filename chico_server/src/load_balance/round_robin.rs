@@ -1,3 +1,21 @@
+//! # RoundRobinBalancer
+//!
+//! A concurrent round-robin load balancer that distributes requests evenly across a list of upstream `Node`s.
+//!
+//! - Thread-safe via atomic counter.
+//! - Automatically resets counter when it exceeds a configured threshold to prevent overflow.
+//! - Uses `Arc<Node>` for efficient sharing.
+//!
+//! ## Example
+//! ```rust
+//! let nodes = vec![
+//!     "127.0.0.1:80".parse().unwrap(),
+//!     "1.0.0.1:9090".parse().unwrap(),
+//! ];
+//! let balancer = RoundRobinBalancer::new(nodes);
+//! let next = balancer.next();
+//! ```
+
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
@@ -5,7 +23,13 @@ use std::sync::{
 
 use crate::load_balance::node::Node;
 
-#[allow(dead_code)]
+/// A thread-safe round-robin load balancer.
+///
+/// This balancer distributes requests across a fixed list of upstream nodes
+/// by rotating through them using an atomic counter.
+///
+/// If the counter exceeds a configured `RESET_THRESHOLD`, it is reset
+/// to avoid integer overflow.
 pub struct RoundRobinBalancer {
     nodes: Arc<[Arc<Node>]>,
     counter: AtomicUsize,
@@ -19,6 +43,9 @@ const RESET_THRESHOLD: usize = usize::MAX / 2;
 
 #[allow(dead_code)]
 impl RoundRobinBalancer {
+    /// Creates a new `RoundRobinBalancer` from a list of nodes.
+    ///
+    /// Each node is internally wrapped in an `Arc` for cheap cloning and sharing.
     pub fn new(nodes: Vec<Node>) -> Self {
         let arc_nodes: Vec<Arc<Node>> = nodes.into_iter().map(Arc::new).collect();
 
@@ -28,6 +55,11 @@ impl RoundRobinBalancer {
         }
     }
 
+    /// Returns the next node to use, rotating through the list.
+    ///
+    /// If the node list is empty, returns `None`.
+    ///
+    /// This method is safe to call from multiple threads concurrently.
     pub fn next(&self) -> Option<Arc<Node>> {
         let len = self.nodes.len();
         if len == 0 {
@@ -41,12 +73,12 @@ impl RoundRobinBalancer {
             let _ = self.counter.compare_exchange(
                 current + 1,
                 index + 1,
-                Ordering::Relaxed,
+                Ordering::SeqCst,
                 Ordering::Relaxed,
             );
         }
 
-        Some(self.nodes[current % len].clone())
+        Some(self.nodes[index].clone())
     }
 }
 
@@ -118,8 +150,9 @@ mod tests {
         );
     }
 
+    /// Stress test: Ensures thread-safe access and even load distribution across many threads.
     #[test]
-    fn test_concurrent_access_without_hash() {
+    fn test_concurrent_access() {
         let nodes: Vec<Node> = vec![
             "127.0.0.1:80".parse().unwrap(),
             "1.0.0.1:9090".parse().unwrap(),
