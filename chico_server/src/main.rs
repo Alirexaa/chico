@@ -6,6 +6,7 @@ use std::process::ExitCode;
 mod cli;
 mod config;
 mod handlers;
+mod load_balance;
 mod server;
 #[cfg(test)]
 mod test_utils;
