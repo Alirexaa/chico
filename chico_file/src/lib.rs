@@ -12,6 +12,8 @@ use nom::{
 };
 use types::{Config, VirtualHost};
 
+use crate::types::Upstream;
+
 pub mod types;
 
 // Parses a single-line comment like "# this is a comment"
@@ -115,9 +117,9 @@ fn parse_handler(input: &str) -> IResult<&str, types::Handler> {
     alt((
         map(preceded(tag("file"), parse_value), types::Handler::File),
         map(preceded(tag("proxy"), parse_value), |addr| {
-            types::Handler::Proxy(types::LoadBalancer::NoBalancer(types::Upstream {
-                addrs: addr.parse().unwrap(),
-            }))
+            types::Handler::Proxy(types::LoadBalancer::NoBalancer(
+                Upstream::new(addr).unwrap(),
+            ))
         }),
         map(preceded(tag("dir"), parse_value), types::Handler::Dir),
         map(preceded(tag("browse"), parse_value), types::Handler::Browse),
@@ -629,9 +631,9 @@ mod tests {
                 parse_handler("proxy http://localhost:3000"),
                 Ok((
                     "",
-                    types::Handler::Proxy(types::LoadBalancer::NoBalancer(Upstream {
-                        addrs: "http://localhost:3000".to_string().parse().unwrap()
-                    }))
+                    types::Handler::Proxy(types::LoadBalancer::NoBalancer(
+                        Upstream::new("http://localhost:3000".to_string()).unwrap()
+                    ))
                 ))
             );
         }
@@ -1469,12 +1471,10 @@ mod tests {
                                     types::Route {
                                         path: "/api/**".to_string(),
                                         handler: types::Handler::Proxy(
-                                            types::LoadBalancer::NoBalancer(Upstream {
-                                                addrs: "http://localhost:3000"
-                                                    .to_string()
-                                                    .parse()
+                                            types::LoadBalancer::NoBalancer(
+                                                Upstream::new("http://localhost:3000".to_string())
                                                     .unwrap()
-                                            })
+                                            )
                                         ),
                                         middlewares: vec![
                                             types::Middleware::Cors,
@@ -1583,12 +1583,12 @@ mod tests {
                                     types::Route {
                                         path: "/blog/**".to_string(),
                                         handler: types::Handler::Proxy(
-                                            types::LoadBalancer::NoBalancer(Upstream {
-                                                addrs: "http://blog.example.com"
-                                                    .to_string()
-                                                    .parse()
-                                                    .unwrap()
-                                            })
+                                            types::LoadBalancer::NoBalancer(
+                                                Upstream::new(
+                                                    "http://blog.example.com".to_string()
+                                                )
+                                                .unwrap()
+                                            )
                                         ),
                                         middlewares: vec![
                                             types::Middleware::Gzip,
@@ -1598,12 +1598,12 @@ mod tests {
                                     types::Route {
                                         path: "/admin".to_string(),
                                         handler: types::Handler::Proxy(
-                                            types::LoadBalancer::NoBalancer(Upstream {
-                                                addrs: "http://admin.example.com"
-                                                    .to_string()
-                                                    .parse()
-                                                    .unwrap()
-                                            })
+                                            types::LoadBalancer::NoBalancer(
+                                                Upstream::new(
+                                                    "http://admin.example.com".to_string()
+                                                )
+                                                .unwrap()
+                                            )
                                         ),
                                         middlewares: vec![types::Middleware::Auth {
                                             username: "superuser".to_string(),

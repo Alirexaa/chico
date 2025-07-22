@@ -1,5 +1,7 @@
 use std::net::SocketAddr;
 
+use url::Url;
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Config {
     pub virtual_hosts: Vec<VirtualHost>,
@@ -43,6 +45,32 @@ pub enum LoadBalancer {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Upstream {
     pub addrs: SocketAddr,
+    url: url::Url,
+}
+
+impl Upstream {
+    pub fn new(upstream_addr: String) -> Result<Self, String> {
+        let parse_result = Url::parse(&upstream_addr);
+        let Ok(url) = parse_result else {
+            return Err(parse_result.err().unwrap().to_string());
+        };
+
+        let host = url.host();
+
+        let Some(host) = host else {
+            return Err("host name is not valid".to_string());
+        };
+
+        let port = url.port().map_or(80, |port| port);
+
+        let host_and_port = format!("{host}:{port}");
+        let addrs = host_and_port.parse::<SocketAddr>();
+        let Ok(addrs) = addrs else {
+            return Err(addrs.err().unwrap().to_string());
+        };
+
+        Ok(Upstream { addrs, url })
+    }
 }
 
 impl Handler {
@@ -101,7 +129,6 @@ pub enum HeaderOperator {
 
 #[cfg(test)]
 mod tests {
-    use std::net::{Ipv4Addr, SocketAddrV4};
 
     use crate::types::Upstream;
 
@@ -112,9 +139,9 @@ mod tests {
         let handler = Handler::File(String::new());
         assert_eq!(handler.type_name(), "File");
 
-        let handler = Handler::Proxy(crate::types::LoadBalancer::NoBalancer(Upstream {
-            addrs: std::net::SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080)),
-        }));
+        let handler = Handler::Proxy(crate::types::LoadBalancer::NoBalancer(
+            Upstream::new("http://127.0.0.1".to_string()).unwrap(),
+        ));
         assert_eq!(handler.type_name(), "Proxy");
 
         let handler = Handler::Dir(String::new());
