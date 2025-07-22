@@ -1,10 +1,10 @@
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use crate::{
-    config::ConfigExt, handlers::reverse_proxy::ReverseProxyHandler, uri::UriExt,
-    virtual_host::VirtualHostExt,
+    config::ConfigExt, handlers::reverse_proxy::ReverseProxyHandler, virtual_host::VirtualHostExt,
 };
 use chico_file::types::Config;
+use crates_uri::UriExt;
 use file::FileHandler;
 use http::{Request, Uri};
 use hyper::{body::Bytes, Response};

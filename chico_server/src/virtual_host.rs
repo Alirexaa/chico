@@ -1,9 +1,8 @@
 use std::str::FromStr;
 
 use chico_file::types::{Route, VirtualHost};
+use crates_uri::UriExt;
 use http::Uri;
-
-use crate::uri::UriExt;
 
 pub trait VirtualHostExt {
     fn find_route(&self, path: &str) -> Option<&Route>;

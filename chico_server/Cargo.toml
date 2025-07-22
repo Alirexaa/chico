@@ -20,6 +20,7 @@ mimee = { version = "0.2"}
 futures-util = { version = "0.3", default-features = false }
 bytes = "1"
 crates_tracing = { version = "0.1.0", path = "../crates_tracing" }
+crates_uri ={ version = "0.1.0", path = "../crates_uri"}
 tracing = { version = "0.1.41" }
 
 [dev-dependencies]
