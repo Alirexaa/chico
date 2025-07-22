@@ -14,7 +14,7 @@ pub trait UriExt {
     /// # Examples
     ///
     /// ```
-    /// use chico_server::uri::UriExt;
+    /// use crates_uri::UriExt;
     /// use http::Uri;
     ///
     /// let uri: Uri = "https://example.com".parse().unwrap();
