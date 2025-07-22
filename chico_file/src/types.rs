@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Config {
     pub virtual_hosts: Vec<VirtualHost>,
@@ -19,7 +21,7 @@ pub struct Route {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Handler {
     File(String),
-    Proxy(String),
+    Proxy(LoadBalancer),
     Dir(String),
     Browse(String),
     Respond {
@@ -30,6 +32,17 @@ pub enum Handler {
         path: Option<String>,
         status_code: Option<u16>,
     },
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum LoadBalancer {
+    NoBalancer(Upstream),
+    RoundRobin(Vec<Upstream>),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Upstream {
+    pub addrs: SocketAddr,
 }
 
 impl Handler {
@@ -88,6 +101,10 @@ pub enum HeaderOperator {
 
 #[cfg(test)]
 mod tests {
+    use std::net::{Ipv4Addr, SocketAddrV4};
+
+    use crate::types::Upstream;
+
     use super::Handler;
 
     #[test]
@@ -95,7 +112,9 @@ mod tests {
         let handler = Handler::File(String::new());
         assert_eq!(handler.type_name(), "File");
 
-        let handler = Handler::Proxy(String::new());
+        let handler = Handler::Proxy(crate::types::LoadBalancer::NoBalancer(Upstream {
+            addrs: std::net::SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080)),
+        }));
         assert_eq!(handler.type_name(), "Proxy");
 
         let handler = Handler::Dir(String::new());
