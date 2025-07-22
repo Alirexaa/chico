@@ -38,11 +38,12 @@ impl RequestHandler for ReverseProxyHandler {
         let _guard = span.enter();
         debug!("start connect to upstream");
         let upstream = self.get_upstream();
-        let connect_result = TcpStream::connect(&upstream.addrs).await;
+        let host_and_port = upstream.get_host_port();
+        let connect_result = TcpStream::connect(host_and_port).await;
 
         let Ok(client_stream) = connect_result else {
             let err = connect_result.err().unwrap();
-            error!("could not connect to upstream server. Given upstream : {upstream} - Error : {error}" , upstream  = &upstream.addrs, error= err);
+            error!("could not connect to upstream server. Given upstream : {upstream} - Error : {error}" , upstream  = host_and_port, error= err);
             return RespondHandler::bad_gateway_with_body(
                 "502 Bad Gateway - could not connect to upstream server.".to_string(),
             )
@@ -77,14 +78,13 @@ impl RequestHandler for ReverseProxyHandler {
         });
 
         let scheme = "http";
-        let host_port = &upstream.addrs;
         let path_and_query = request
             .uri()
             .path_and_query()
             .map(|x| x.as_str())
             .unwrap_or("/");
 
-        let uri_string = format!("{scheme}://{host_port}{path_and_query}");
+        let uri_string = format!("{scheme}://{host_and_port}{path_and_query}");
 
         let mut request = request;
         let uri = uri_string.parse::<Uri>().unwrap();

@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use url::Url;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -44,8 +42,8 @@ pub enum LoadBalancer {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Upstream {
-    pub addrs: SocketAddr,
     url: url::Url,
+    host_addrs: String,
 }
 
 impl Upstream {
@@ -64,12 +62,15 @@ impl Upstream {
         let port = url.port().map_or(80, |port| port);
 
         let host_and_port = format!("{host}:{port}");
-        let addrs = host_and_port.parse::<SocketAddr>();
-        let Ok(addrs) = addrs else {
-            return Err(addrs.err().unwrap().to_string());
-        };
 
-        Ok(Upstream { addrs, url })
+        Ok(Upstream {
+            host_addrs: host_and_port,
+            url,
+        })
+    }
+
+    pub fn get_host_port(&self) -> &str {
+        &self.host_addrs
     }
 }
 
