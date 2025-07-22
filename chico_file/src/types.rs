@@ -1,4 +1,4 @@
-use url::Url;
+use http::{uri::Scheme, Uri};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Config {
@@ -42,30 +42,43 @@ pub enum LoadBalancer {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Upstream {
-    url: url::Url,
+    uri: http::Uri,
     host_addrs: String,
 }
 
 impl Upstream {
     pub fn new(upstream_addr: String) -> Result<Self, String> {
-        let parse_result = Url::parse(&upstream_addr);
-        let Ok(url) = parse_result else {
+        let parse_result: Result<http::Uri, http::uri::InvalidUri> = upstream_addr.parse();
+        let Ok(uri) = parse_result else {
             return Err(parse_result.err().unwrap().to_string());
         };
 
-        let host = url.host();
+        let host = uri.host();
 
         let Some(host) = host else {
             return Err("host name is not valid".to_string());
         };
 
-        let port = url.port().map_or(80, |port| port);
+        let port = Upstream::get_port(&uri);
 
         let host_and_port = format!("{host}:{port}");
 
         Ok(Upstream {
             host_addrs: host_and_port,
-            url,
+            uri,
+        })
+    }
+
+    // this method should be replcate by a helper crates beacase we have this method in sever crate too.it is in chico_server::uri mod;
+    fn get_port(uri: &Uri) -> u16 {
+        let port = uri.port_u16();
+        let scheme = uri.scheme();
+        port.unwrap_or_else(|| {
+            if scheme == Some(&Scheme::HTTPS) {
+                443
+            } else {
+                80
+            }
         })
     }
 
