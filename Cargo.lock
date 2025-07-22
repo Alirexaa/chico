@@ -266,6 +266,7 @@ dependencies = [
  "claims",
  "clap",
  "crates_tracing",
+ "crates_uri",
  "futures-util",
  "http",
  "http-body-util",
@@ -364,6 +365,14 @@ dependencies = [
  "tracing-appender",
  "tracing-opentelemetry",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "crates_uri"
+version = "0.1.0"
+dependencies = [
+ "http",
+ "rstest",
 ]
 
 [[package]]
