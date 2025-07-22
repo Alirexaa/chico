@@ -1,4 +1,4 @@
-use http::{uri::Scheme, Uri};
+use crates_uri::UriExt;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Config {
@@ -59,26 +59,13 @@ impl Upstream {
             return Err("host name is not valid".to_string());
         };
 
-        let port = Upstream::get_port(&uri);
+        let port = &uri.get_port();
 
         let host_and_port = format!("{host}:{port}");
 
         Ok(Upstream {
             host_addrs: host_and_port,
             uri,
-        })
-    }
-
-    // this method should be replcate by a helper crates beacase we have this method in sever crate too.it is in chico_server::uri mod;
-    fn get_port(uri: &Uri) -> u16 {
-        let port = uri.port_u16();
-        let scheme = uri.scheme();
-        port.unwrap_or_else(|| {
-            if scheme == Some(&Scheme::HTTPS) {
-                443
-            } else {
-                80
-            }
         })
     }
 
