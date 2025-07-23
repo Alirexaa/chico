@@ -131,6 +131,8 @@ pub enum HeaderOperator {
 #[cfg(test)]
 mod tests {
 
+    use rstest::rstest;
+
     use crate::types::Upstream;
 
     use super::Handler;
@@ -162,5 +164,31 @@ mod tests {
             status_code: None,
         };
         assert_eq!(handler.type_name(), "Redirect");
+    }
+
+    #[rstest]
+    #[case("localhost", "localhost:80")]
+    #[case("http://localhost", "localhost:80")]
+    #[case("localhost:3000", "localhost:3000")]
+    #[case("http://localhost:3000", "localhost:3000")]
+    #[case("https://localhost", "localhost:443")]
+    #[case("https://localhost:8443", "localhost:8443")]
+    #[case("example.com", "example.com:80")]
+    #[case("http://example.com", "example.com:80")]
+    #[case("http://example.com:3000", "example.com:3000")]
+    #[case("https://example.com", "example.com:443")]
+    #[case("https://example.com:8443", "example.com:8443")]
+    fn test_upstream_new_ok(#[case] given_addrs: &str, #[case] host_and_port: &str) {
+        let upstream = Upstream::new(given_addrs.to_string());
+        let upstream = claims::assert_ok!(upstream);
+        assert_eq!(upstream.get_host_port(), host_and_port)
+    }
+
+    #[rstest]
+    #[case("")]
+    #[case("/addrs")]
+    fn test_upstream_new_err(#[case] given_addrs: &str) {
+        let upstream = Upstream::new(given_addrs.to_string());
+        claims::assert_err!(upstream);
     }
 }
