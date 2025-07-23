@@ -12,6 +12,8 @@ use nom::{
 };
 use types::{Config, VirtualHost};
 
+use crate::types::Upstream;
+
 pub mod types;
 
 // Parses a single-line comment like "# this is a comment"
@@ -114,7 +116,11 @@ fn parse_handler(input: &str) -> IResult<&str, types::Handler> {
     let (input, _) = multispace0(input)?;
     alt((
         map(preceded(tag("file"), parse_value), types::Handler::File),
-        map(preceded(tag("proxy"), parse_value), types::Handler::Proxy),
+        map(preceded(tag("proxy"), parse_value), |addr| {
+            types::Handler::Proxy(types::LoadBalancer::NoBalancer(
+                Upstream::new(addr).unwrap(),
+            ))
+        }),
         map(preceded(tag("dir"), parse_value), types::Handler::Dir),
         map(preceded(tag("browse"), parse_value), types::Handler::Browse),
         map(
@@ -607,7 +613,8 @@ mod tests {
 
     mod handlers {
         use crate::{
-            parse_handler, parse_redirect_handler_args, parse_respond_handler_args, types,
+            parse_handler, parse_redirect_handler_args, parse_respond_handler_args,
+            types::{self, Upstream},
         };
 
         #[test]
@@ -624,7 +631,9 @@ mod tests {
                 parse_handler("proxy http://localhost:3000"),
                 Ok((
                     "",
-                    types::Handler::Proxy("http://localhost:3000".to_string())
+                    types::Handler::Proxy(types::LoadBalancer::NoBalancer(
+                        Upstream::new("http://localhost:3000".to_string()).unwrap()
+                    ))
                 ))
             );
         }
@@ -1174,7 +1183,7 @@ mod tests {
     mod config {
         use crate::{
             parse_config,
-            types::{self, Config},
+            types::{self, Config, Upstream},
         };
 
         #[test]
@@ -1462,7 +1471,10 @@ mod tests {
                                     types::Route {
                                         path: "/api/**".to_string(),
                                         handler: types::Handler::Proxy(
-                                            "http://localhost:3000".to_string()
+                                            types::LoadBalancer::NoBalancer(
+                                                Upstream::new("http://localhost:3000".to_string())
+                                                    .unwrap()
+                                            )
                                         ),
                                         middlewares: vec![
                                             types::Middleware::Cors,
@@ -1571,7 +1583,12 @@ mod tests {
                                     types::Route {
                                         path: "/blog/**".to_string(),
                                         handler: types::Handler::Proxy(
-                                            "http://blog.example.com".to_string()
+                                            types::LoadBalancer::NoBalancer(
+                                                Upstream::new(
+                                                    "http://blog.example.com".to_string()
+                                                )
+                                                .unwrap()
+                                            )
                                         ),
                                         middlewares: vec![
                                             types::Middleware::Gzip,
@@ -1581,7 +1598,12 @@ mod tests {
                                     types::Route {
                                         path: "/admin".to_string(),
                                         handler: types::Handler::Proxy(
-                                            "http://admin.example.com".to_string()
+                                            types::LoadBalancer::NoBalancer(
+                                                Upstream::new(
+                                                    "http://admin.example.com".to_string()
+                                                )
+                                                .unwrap()
+                                            )
                                         ),
                                         middlewares: vec![types::Middleware::Auth {
                                             username: "superuser".to_string(),

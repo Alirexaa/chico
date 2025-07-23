@@ -1,3 +1,5 @@
+use crates_uri::UriExt;
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Config {
     pub virtual_hosts: Vec<VirtualHost>,
@@ -19,7 +21,7 @@ pub struct Route {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Handler {
     File(String),
-    Proxy(String),
+    Proxy(LoadBalancer),
     Dir(String),
     Browse(String),
     Respond {
@@ -30,6 +32,46 @@ pub enum Handler {
         path: Option<String>,
         status_code: Option<u16>,
     },
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum LoadBalancer {
+    NoBalancer(Upstream),
+    RoundRobin(Vec<Upstream>),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Upstream {
+    uri: http::Uri,
+    host_addrs: String,
+}
+
+impl Upstream {
+    pub fn new(upstream_addr: String) -> Result<Self, String> {
+        let parse_result: Result<http::Uri, http::uri::InvalidUri> = upstream_addr.parse();
+        let Ok(uri) = parse_result else {
+            return Err(parse_result.err().unwrap().to_string());
+        };
+
+        let host = uri.host();
+
+        let Some(host) = host else {
+            return Err("host name is not valid".to_string());
+        };
+
+        let port = &uri.get_port();
+
+        let host_and_port = format!("{host}:{port}");
+
+        Ok(Upstream {
+            host_addrs: host_and_port,
+            uri,
+        })
+    }
+
+    pub fn get_host_port(&self) -> &str {
+        &self.host_addrs
+    }
 }
 
 impl Handler {
@@ -88,6 +130,11 @@ pub enum HeaderOperator {
 
 #[cfg(test)]
 mod tests {
+
+    use rstest::rstest;
+
+    use crate::types::Upstream;
+
     use super::Handler;
 
     #[test]
@@ -95,7 +142,9 @@ mod tests {
         let handler = Handler::File(String::new());
         assert_eq!(handler.type_name(), "File");
 
-        let handler = Handler::Proxy(String::new());
+        let handler = Handler::Proxy(crate::types::LoadBalancer::NoBalancer(
+            Upstream::new("http://127.0.0.1".to_string()).unwrap(),
+        ));
         assert_eq!(handler.type_name(), "Proxy");
 
         let handler = Handler::Dir(String::new());
@@ -115,5 +164,31 @@ mod tests {
             status_code: None,
         };
         assert_eq!(handler.type_name(), "Redirect");
+    }
+
+    #[rstest]
+    #[case("localhost", "localhost:80")]
+    #[case("http://localhost", "localhost:80")]
+    #[case("localhost:3000", "localhost:3000")]
+    #[case("http://localhost:3000", "localhost:3000")]
+    #[case("https://localhost", "localhost:443")]
+    #[case("https://localhost:8443", "localhost:8443")]
+    #[case("example.com", "example.com:80")]
+    #[case("http://example.com", "example.com:80")]
+    #[case("http://example.com:3000", "example.com:3000")]
+    #[case("https://example.com", "example.com:443")]
+    #[case("https://example.com:8443", "example.com:8443")]
+    fn test_upstream_new_ok(#[case] given_addrs: &str, #[case] host_and_port: &str) {
+        let upstream = Upstream::new(given_addrs.to_string());
+        let upstream = claims::assert_ok!(upstream);
+        assert_eq!(upstream.get_host_port(), host_and_port)
+    }
+
+    #[rstest]
+    #[case("")]
+    #[case("/addrs")]
+    fn test_upstream_new_err(#[case] given_addrs: &str) {
+        let upstream = Upstream::new(given_addrs.to_string());
+        claims::assert_err!(upstream);
     }
 }

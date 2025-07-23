@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use chico_file::types::{LoadBalancer, Upstream};
 use http::{HeaderValue, Uri};
 use http_body_util::BodyExt;
 use hyper::{Request, Response};
@@ -11,12 +12,18 @@ use crate::handlers::{respond::RespondHandler, BoxBody, RequestHandler};
 
 #[derive(PartialEq, Debug)]
 pub struct ReverseProxyHandler {
-    upstream: String,
+    load_balancer: LoadBalancer,
 }
 
 impl ReverseProxyHandler {
-    pub fn new(upstream: String) -> Self {
-        Self { upstream }
+    pub fn new(load_balancer: LoadBalancer) -> Self {
+        Self { load_balancer }
+    }
+    fn get_upstream(&self) -> &Upstream {
+        match &self.load_balancer {
+            LoadBalancer::NoBalancer(upstream) => upstream,
+            LoadBalancer::RoundRobin(_upstreams) => todo!(),
+        }
     }
 }
 
@@ -30,11 +37,13 @@ impl RequestHandler for ReverseProxyHandler {
         let span = info_span!("my_span");
         let _guard = span.enter();
         debug!("start connect to upstream");
-        let connect_result = TcpStream::connect(&self.upstream).await;
+        let upstream = self.get_upstream();
+        let host_and_port = upstream.get_host_port();
+        let connect_result = TcpStream::connect(host_and_port).await;
 
         let Ok(client_stream) = connect_result else {
             let err = connect_result.err().unwrap();
-            error!("could not connect to upstream server. Given upstream : {upstream} - Error : {error}" , upstream  = &self.upstream, error= err);
+            error!("could not connect to upstream server. Given upstream : {upstream} - Error : {error}" , upstream  = host_and_port, error= err);
             return RespondHandler::bad_gateway_with_body(
                 "502 Bad Gateway - could not connect to upstream server.".to_string(),
             )
@@ -69,14 +78,13 @@ impl RequestHandler for ReverseProxyHandler {
         });
 
         let scheme = "http";
-        let host_port = &self.upstream;
         let path_and_query = request
             .uri()
             .path_and_query()
             .map(|x| x.as_str())
             .unwrap_or("/");
 
-        let uri_string = format!("{scheme}://{host_port}{path_and_query}");
+        let uri_string = format!("{scheme}://{host_and_port}{path_and_query}");
 
         let mut request = request;
         let uri = uri_string.parse::<Uri>().unwrap();
