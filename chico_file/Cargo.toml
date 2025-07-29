@@ -10,7 +10,7 @@ documentation.workspace = true
 [dependencies]
 nom = "7"
 http = "1.3.1"
-crates_uri = { version = "0.1.0", path = "../crates_uri" }
+crates_uri = { version = "0.1.0", path = "../crates/crates_uri" }
 
 [dev-dependencies]
 rstest = "0.25.0"
