@@ -23,6 +23,9 @@ crates_tracing = { version = "0.1.0", path = "../crates/crates_tracing" }
 crates_uri ={ version = "0.1.0", path = "../crates/crates_uri"}
 tracing = { version = "0.1.41" }
 
+[target.'cfg(unix)'.dependencies]
+daemonize = "0.5"
+
 [dev-dependencies]
 axum = "0.8.4"
 rstest = "0.25.0"
