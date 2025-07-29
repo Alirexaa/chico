@@ -7,13 +7,14 @@ use std::process::{Command, Stdio};
 const PID_FILE_NAME: &str = "chico.pid";
 
 /// Get the path to the PID file
-fn get_pid_file_path() -> PathBuf {
+pub fn get_pid_file_path() -> PathBuf {
     let mut path = std::env::temp_dir();
     path.push(PID_FILE_NAME);
     path
 }
 
 /// Write the process ID to the PID file
+#[cfg(any(windows, test))]
 pub fn write_pid_file(pid: u32) -> io::Result<()> {
     let path = get_pid_file_path();
     fs::write(path, pid.to_string())
@@ -86,6 +87,55 @@ pub fn start_daemon(config_path: &str) -> io::Result<u32> {
         }
     }
 
+    #[cfg(unix)]
+    {
+        start_daemon_unix(config_path)
+    }
+
+    #[cfg(windows)]
+    {
+        start_daemon_windows(config_path)
+    }
+}
+
+#[cfg(unix)]
+fn start_daemon_unix(config_path: &str) -> io::Result<u32> {
+    // Get current executable path
+    let current_exe = std::env::current_exe()?;
+    
+    // Spawn a child process that will become the daemon
+    let child = Command::new(&current_exe)
+        .arg("run")
+        .arg("--daemon-mode")
+        .arg("--config")
+        .arg(config_path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+
+    let child_pid = child.id();
+    
+    // Give the daemon process a moment to start and daemonize itself
+    std::thread::sleep(std::time::Duration::from_millis(2000));
+    
+    // Check if the PID file was created by the daemon
+    if let Ok(daemon_pid) = read_pid_file() {
+        println!("Daemon started with PID {}", daemon_pid);
+        Ok(daemon_pid)
+    } else {
+        // Check if the original child process is still running
+        if is_process_running(child_pid) {
+            println!("Daemon started with PID {}", child_pid);
+            Ok(child_pid)
+        } else {
+            Err(io::Error::new(io::ErrorKind::Other, "Daemon process failed to start"))
+        }
+    }
+}
+
+#[cfg(windows)]
+fn start_daemon_windows(config_path: &str) -> io::Result<u32> {
     // Get current executable path
     let current_exe = std::env::current_exe()?;
 

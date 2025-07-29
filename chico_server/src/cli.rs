@@ -19,6 +19,8 @@ pub(crate) enum Commands {
     Run {
         #[arg(short, long)]
         config: String,
+        #[arg(long, hide = true)]
+        daemon_mode: bool,
     },
     /// Start the server as a background daemon
     Start {
@@ -59,7 +61,10 @@ mod tests {
         // Match the parsed command
 
         match cli.command {
-            Commands::Run { config } => assert_eq!(config, "/path/to/file"),
+            Commands::Run { config, daemon_mode } => {
+                assert_eq!(config, "/path/to/file");
+                assert!(!daemon_mode);
+            },
             _ => panic!("Expected 'Run' command"),
         }
     }

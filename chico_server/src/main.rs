@@ -3,6 +3,8 @@ use clap::Parser;
 use config::validate_config_file;
 use server::run_server;
 use std::process::ExitCode;
+#[cfg(unix)]
+use daemonize::Daemonize;
 mod cli;
 mod config;
 mod daemon;
@@ -18,7 +20,27 @@ async fn main() -> ExitCode {
 
     let cli = cli::Cli::parse();
     match cli.command {
-        cli::Commands::Run { config } => {
+        cli::Commands::Run { config, daemon_mode } => {
+            // If daemon_mode is true and we're on Unix, daemonize first
+            #[cfg(unix)]
+            if daemon_mode {
+                let daemon = Daemonize::new()
+                    .pid_file(daemon::get_pid_file_path())
+                    .chown_pid_file(true)
+                    .working_directory("/tmp");
+                
+                match daemon.start() {
+                    Ok(_) => {
+                        // We are now in the daemon process
+                        // Continue with normal server startup
+                    },
+                    Err(e) => {
+                        eprintln!("Failed to daemonize: {}", e);
+                        return ExitCode::FAILURE;
+                    }
+                }
+            }
+            
             let result = validate_config_file(config.as_str()).await;
 
             let Ok(conf) = result else {
