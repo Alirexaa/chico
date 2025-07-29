@@ -5,6 +5,7 @@ use server::run_server;
 use std::process::ExitCode;
 mod cli;
 mod config;
+mod daemon;
 mod handlers;
 mod load_balance;
 mod server;
@@ -62,6 +63,37 @@ async fn main() -> ExitCode {
             server.await;
 
             return ExitCode::SUCCESS;
+        }
+        cli::Commands::Start { config } => {
+            let result = validate_config_file(config.as_str()).await;
+
+            if let Err(e) = result {
+                eprintln!("Configuration validation failed: {}", e);
+                return ExitCode::FAILURE;
+            };
+
+            match daemon::start_daemon(&config) {
+                Ok(_) => {
+                    println!("✅ Server started as daemon");
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("Failed to start daemon: {}", e);
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        cli::Commands::Stop => {
+            match daemon::stop_daemon() {
+                Ok(_) => {
+                    println!("✅ Daemon stopped");
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("Failed to stop daemon: {}", e);
+                    ExitCode::FAILURE
+                }
+            }
         }
         cli::Commands::Validate { config } => {
             let result = validate_config_file(config.as_str()).await;
