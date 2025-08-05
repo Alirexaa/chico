@@ -21,7 +21,7 @@ use std::sync::{
     Arc,
 };
 
-use crate::load_balance::node::Node;
+use crate::load_balance::{node::Node, LoadBalance};
 
 /// A thread-safe round-robin load balancer.
 ///
@@ -79,6 +79,12 @@ impl RoundRobinBalancer {
         }
 
         Some(self.nodes[index].clone())
+    }
+}
+
+impl LoadBalance for RoundRobinBalancer {
+    fn get_node(&self) -> Option<Arc<Node>> {
+        self.next()
     }
 }
 
