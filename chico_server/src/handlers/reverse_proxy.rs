@@ -11,7 +11,6 @@ use crate::{
     handlers::{respond::RespondHandler, BoxBody, RequestHandler},
     load_balance::node::Node,
 };
-
 pub struct ReverseProxyHandler {
     load_balancer: Box<dyn crate::load_balance::LoadBalance>,
 }

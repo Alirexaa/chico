@@ -1,7 +1,10 @@
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use crate::{
-    config::ConfigExt, handlers::reverse_proxy::ReverseProxyHandler, virtual_host::VirtualHostExt,
+    config::ConfigExt,
+    handlers::reverse_proxy::ReverseProxyHandler,
+    load_balance::{node::Node, round_robin::RoundRobinBalancer},
+    virtual_host::VirtualHostExt,
 };
 use chico_file::types::Config;
 use crates_uri::UriExt;
@@ -108,7 +111,18 @@ where
         chico_file::types::Handler::Proxy(upstream) => {
             let span = info_span!("reverse_proxy");
             let _guard = span.enter();
-            ReverseProxyHandler::new(upstream.clone())
+
+            let balancer = match upstream {
+                chico_file::types::LoadBalancer::NoBalancer(_upstream) => todo!(),
+                chico_file::types::LoadBalancer::RoundRobin(upstreams) => RoundRobinBalancer::new(
+                    upstreams
+                        .iter()
+                        .map(|u| Node::new(u.get_host_port().parse().unwrap()))
+                        .collect(),
+                ),
+            };
+
+            ReverseProxyHandler::new(Box::new(balancer))
                 .handle(request)
                 .await
         }

@@ -30,6 +30,7 @@ use crate::load_balance::{node::Node, LoadBalance};
 ///
 /// If the counter exceeds a configured `RESET_THRESHOLD`, it is reset
 /// to avoid integer overflow.
+
 pub struct RoundRobinBalancer {
     nodes: Arc<[Arc<Node>]>,
     counter: AtomicUsize,
