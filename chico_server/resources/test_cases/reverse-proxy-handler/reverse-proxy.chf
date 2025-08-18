@@ -1,5 +1,5 @@
 localhost:8080 {
     route /* {
-        proxy localhost:9000
+        proxy 127.0.0.1:9000
     }
 }
