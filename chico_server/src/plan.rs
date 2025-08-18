@@ -102,7 +102,7 @@ impl ServerPlan {
                         RoutePlan::Redirect(RedirectHandler::new(
                             path.clone()
                                 .expect("path parameter for redirect handler exepted"),
-                            status_code.clone(),
+                            *status_code,
                         ))
                     }
                 };
@@ -113,7 +113,7 @@ impl ServerPlan {
                 vh.domain.clone(),
                 VirtualHostPlan {
                     domain: vh.domain.clone(),
-                    routes: routes,
+                    routes,
                 },
             );
         }
