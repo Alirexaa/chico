@@ -1,22 +1,15 @@
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
-use crate::{
-    config::ConfigExt, handlers::reverse_proxy::ReverseProxyHandler, virtual_host::VirtualHostExt,
-};
-use chico_file::types::Config;
+use crate::{handlers::respond::RespondHandler, plan::ServerPlan};
 use crates_uri::UriExt;
-use file::FileHandler;
 use http::{Request, Uri};
 use hyper::{body::Bytes, Response};
-use redirect::RedirectHandler;
-use respond::RespondHandler;
-use tracing::info_span;
 pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, std::io::Error>;
 
-mod file;
-mod redirect;
-mod respond;
-mod reverse_proxy;
+pub mod file;
+pub mod redirect;
+pub mod respond;
+pub mod reverse_proxy;
 pub trait RequestHandler {
     async fn handle<B>(&self, request: Request<B>) -> Response<BoxBody>
     where
@@ -26,7 +19,10 @@ pub trait RequestHandler {
 }
 
 #[allow(dead_code)]
-pub async fn handle_request<B>(request: hyper::Request<B>, config: Arc<Config>) -> Response<BoxBody>
+pub async fn handle_request<B>(
+    request: hyper::Request<B>,
+    plan: Arc<ServerPlan>,
+) -> Response<BoxBody>
 where
     B: hyper::body::Body + Send + 'static,
     B::Data: Send,
@@ -64,7 +60,7 @@ where
 
     let host = host.unwrap();
     let port = uri.get_port();
-    let vh = &config.find_virtual_host(host, port);
+    let vh = &plan.find_virtual_host(host, port);
 
     if vh.is_none() {
         return UtilitiesResponses::not_found_respond_handler()
@@ -84,35 +80,11 @@ where
 
     let route = route.unwrap();
 
-    match &route.handler {
-        chico_file::types::Handler::File(path) => {
-            FileHandler::new(path.clone(), route.path.clone())
-                .handle(request)
-                .await
-        }
-        chico_file::types::Handler::Respond { status, body } => {
-            RespondHandler::new(status.unwrap_or(200), body.clone())
-                .handle(request)
-                .await
-        }
-        chico_file::types::Handler::Redirect {
-            path: _,
-            status_code: _,
-        } => {
-            RedirectHandler {
-                handler: route.handler.clone(),
-            }
-            .handle(request)
-            .await
-        }
-        chico_file::types::Handler::Proxy(upstream) => {
-            let span = info_span!("reverse_proxy");
-            let _guard = span.enter();
-            ReverseProxyHandler::new(upstream.clone())
-                .handle(request)
-                .await
-        }
-        _ => todo!(),
+    match route {
+        crate::plan::RoutePlan::File(h) => h.handle(request).await,
+        crate::plan::RoutePlan::Respond(h) => h.handle(request).await,
+        crate::plan::RoutePlan::Redirect(h) => h.handle(request).await,
+        crate::plan::RoutePlan::ReverseProxy(h) => h.handle(request).await,
     }
 }
 
@@ -168,7 +140,7 @@ mod tests {
     use http_body_util::BodyExt;
     use rstest::rstest;
 
-    use crate::test_utils::MockBody;
+    use crate::{plan::ServerPlan, test_utils::MockBody};
 
     use super::handle_request;
 
@@ -191,7 +163,7 @@ mod tests {
             .body(MockBody::new(b""))
             .unwrap();
 
-        let response = handle_request(request, Arc::new(config)).await;
+        let response = handle_request(request, Arc::new(ServerPlan::from_config(&config))).await;
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
         let response_body = String::from_utf8(
@@ -235,7 +207,7 @@ mod tests {
             .body(MockBody::new(b""))
             .unwrap();
 
-        let response = handle_request(request, Arc::new(config)).await;
+        let response = handle_request(request, Arc::new(ServerPlan::from_config(&config))).await;
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
         assert_some!(
@@ -283,7 +255,7 @@ mod tests {
             .body(MockBody::new(b""))
             .unwrap();
 
-        let response = handle_request(request, Arc::new(config)).await;
+        let response = handle_request(request, Arc::new(ServerPlan::from_config(&config))).await;
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         let response_body = String::from_utf8(
@@ -325,7 +297,7 @@ mod tests {
             .body(MockBody::new(b""))
             .unwrap();
 
-        let response = handle_request(request, Arc::new(config)).await;
+        let response = handle_request(request, Arc::new(ServerPlan::from_config(&config))).await;
 
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         let response_body = String::from_utf8(

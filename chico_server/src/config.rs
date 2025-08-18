@@ -9,6 +9,7 @@ use http::Uri;
 use crate::virtual_host::VirtualHostExt;
 
 pub trait ConfigExt {
+    #[allow(dead_code)]
     fn find_virtual_host(&self, path: &str, port: u16) -> Option<&VirtualHost>;
     fn get_ports(&self) -> Vec<u16>;
 }

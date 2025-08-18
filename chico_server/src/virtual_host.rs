@@ -5,6 +5,7 @@ use crates_uri::UriExt;
 use http::Uri;
 
 pub trait VirtualHostExt {
+    #[allow(dead_code)]
     fn find_route(&self, path: &str) -> Option<&Route>;
     fn get_port(&self) -> u16;
 }

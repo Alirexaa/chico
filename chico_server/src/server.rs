@@ -8,6 +8,7 @@ use tokio::select;
 use tokio::{net::TcpListener, sync::broadcast};
 use tracing::{error, info, info_span};
 
+use crate::plan::ServerPlan;
 use crate::{
     config::ConfigExt,
     handlers::{self, BoxBody},
@@ -45,13 +46,13 @@ pub async fn run_server(config: Config) {
 
     let mut handles = vec![];
 
-    let config = Arc::new(config);
+    let plan = Arc::new(ServerPlan::from_config(&config));
 
     for listener in listeners {
         let mut rx = shutdown_tx.subscribe();
-        let config_clone = config.clone();
+        let plan_clone = plan.clone();
         let join_handle =
-            tokio::spawn(async move { handle_listener(config_clone, listener, &mut rx).await });
+            tokio::spawn(async move { handle_listener(plan_clone, listener, &mut rx).await });
         handles.push(join_handle);
     }
 
@@ -70,7 +71,7 @@ pub async fn run_server(config: Config) {
 }
 
 async fn handle_listener(
-    config: Arc<Config>,
+    plan: Arc<ServerPlan>,
     listener: TcpListener,
     shutdown: &mut broadcast::Receiver<()>,
 ) {
@@ -87,11 +88,11 @@ async fn handle_listener(
                     }
                 };
 
-                let config_clone = config.clone();
+                let plan_clone = plan.clone();
 
                 // Spawn a tokio task to serve multiple connections concurrently
                 tokio::spawn(async move {
-                    handle_connection(config_clone, stream).await;
+                    handle_connection(plan_clone, stream).await;
                 });
             }
             _ = shutdown.recv() => {
@@ -102,16 +103,16 @@ async fn handle_listener(
     }
 }
 
-async fn handle_connection(config: Arc<Config>, stream: tokio::net::TcpStream) {
+async fn handle_connection(plan: Arc<ServerPlan>, stream: tokio::net::TcpStream) {
     // Use an adapter to access something implementing `tokio::io` traits as if they implement
     // `hyper::rt` IO traits.
     let io = TokioIo::new(stream);
 
-    let config_clone = config.clone();
+    let plan_clone = plan.clone();
 
     let service = service_fn(move |req| {
-        let config_clone = config_clone.clone();
-        async move { handle_request(req, config_clone).await }
+        let plan_clone = plan_clone.clone();
+        async move { handle_request(req, plan_clone).await }
     });
 
     if let Err(err) = http1::Builder::new()
@@ -125,9 +126,9 @@ async fn handle_connection(config: Arc<Config>, stream: tokio::net::TcpStream) {
 
 async fn handle_request(
     request: Request<Incoming>,
-    config: Arc<Config>,
+    plan: Arc<ServerPlan>,
 ) -> Result<Response<BoxBody>, Infallible> {
-    let response = handlers::handle_request(request, config).await;
+    let response = handlers::handle_request(request, plan).await;
     Ok(response)
 }
 

@@ -1,6 +1,5 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
-use chico_file::types::{LoadBalancer, Upstream};
 use http::{HeaderValue, Uri};
 use http_body_util::BodyExt;
 use hyper::{Request, Response};
@@ -8,22 +7,22 @@ use hyper_util::rt::TokioIo;
 use tokio::net::TcpStream;
 use tracing::{debug, error, info_span};
 
-use crate::handlers::{respond::RespondHandler, BoxBody, RequestHandler};
+use crate::{
+    handlers::{respond::RespondHandler, BoxBody, RequestHandler},
+    load_balance::node::Node,
+};
 
-#[derive(PartialEq, Debug)]
 pub struct ReverseProxyHandler {
-    load_balancer: LoadBalancer,
+    load_balancer: Box<dyn crate::load_balance::LoadBalance>,
 }
 
+#[allow(dead_code)]
 impl ReverseProxyHandler {
-    pub fn new(load_balancer: LoadBalancer) -> Self {
+    pub fn new(load_balancer: Box<dyn crate::load_balance::LoadBalance>) -> Self {
         Self { load_balancer }
     }
-    fn get_upstream(&self) -> &Upstream {
-        match &self.load_balancer {
-            LoadBalancer::NoBalancer(upstream) => upstream,
-            LoadBalancer::RoundRobin(_upstreams) => todo!(),
-        }
+    fn get_node(&self) -> Option<Arc<Node>> {
+        self.load_balancer.get_node()
     }
 }
 
@@ -37,8 +36,8 @@ impl RequestHandler for ReverseProxyHandler {
         let span = info_span!("my_span");
         let _guard = span.enter();
         debug!("start connect to upstream");
-        let upstream = self.get_upstream();
-        let host_and_port = upstream.get_host_port();
+        let upstream = self.get_node().unwrap();
+        let host_and_port = upstream.addr;
         let connect_result = TcpStream::connect(host_and_port).await;
 
         let Ok(client_stream) = connect_result else {
