@@ -19,18 +19,17 @@ pub(crate) fn format_parse_error(input: &str, error: nom::Err<NomError<&str>>) -
         nom::Err::Error(e) | nom::Err::Failure(e) => {
             let error_location = find_error_location(input, e.input);
             let context = get_error_context(e.input);
-            
+
             match e.code {
                 ErrorKind::Tag => {
                     if e.input.is_empty() {
-                        "Unexpected end of file. The configuration appears to be incomplete.".to_string()
+                        "Unexpected end of file. The configuration appears to be incomplete."
+                            .to_string()
                     } else {
                         let suggestion = suggest_fix_for_content(e.input);
                         format!(
                             "Syntax error near{}: '{}'. {}",
-                            error_location,
-                            context,
-                            suggestion
+                            error_location, context, suggestion
                         )
                     }
                 }
@@ -45,19 +44,17 @@ pub(crate) fn format_parse_error(input: &str, error: nom::Err<NomError<&str>>) -
                     let suggestion = suggest_fix_for_content(e.input);
                     format!(
                         "Invalid syntax near{}: '{}'. {}",
-                        error_location,
-                        context,
-                        suggestion
+                        error_location, context, suggestion
                     )
                 }
                 ErrorKind::Many1 => {
-                    "Expected at least one virtual host definition in the configuration file.".to_string()
+                    "Expected at least one virtual host definition in the configuration file."
+                        .to_string()
                 }
                 _ => {
                     format!(
                         "Parse error near{}: '{}'. Please check the syntax of your configuration.",
-                        error_location,
-                        context
+                        error_location, context
                     )
                 }
             }
@@ -72,11 +69,11 @@ pub(crate) fn format_parse_error(input: &str, error: nom::Err<NomError<&str>>) -
 fn find_error_location(full_input: &str, error_input: &str) -> String {
     // Calculate position where error occurred
     let error_pos = full_input.len() - error_input.len();
-    
+
     // Count lines and find column
     let mut line = 1;
     let mut col = 1;
-    
+
     for (i, ch) in full_input.chars().enumerate() {
         if i >= error_pos {
             break;
@@ -88,7 +85,7 @@ fn find_error_location(full_input: &str, error_input: &str) -> String {
             col += 1;
         }
     }
-    
+
     format!(" line {}, column {}", line, col)
 }
 
@@ -100,7 +97,7 @@ fn get_error_context(error_input: &str) -> String {
         .take(30)
         .take_while(|&c| c != '\n')
         .collect();
-    
+
     if context.len() < error_input.len() {
         format!("{}...", context)
     } else {
@@ -111,14 +108,17 @@ fn get_error_context(error_input: &str) -> String {
 /// Provide suggestions for common configuration errors
 fn suggest_fix_for_content(error_input: &str) -> String {
     let trimmed = error_input.trim();
-    
+
     if trimmed.starts_with('{') && !trimmed.contains('}') {
         "Check for missing closing brace '}'.".to_string()
     } else if trimmed.contains("route") && !trimmed.contains('{') {
         "Route definitions should be followed by a block enclosed in braces { }.".to_string()
     } else if trimmed.chars().any(|c| c.is_alphabetic()) && !trimmed.contains('{') {
         "Domain definitions should be followed by a block enclosed in braces { }.".to_string()
-    } else if trimmed.starts_with("proxy") || trimmed.starts_with("file") || trimmed.starts_with("respond") {
+    } else if trimmed.starts_with("proxy")
+        || trimmed.starts_with("file")
+        || trimmed.starts_with("respond")
+    {
         "Handler definitions should be inside a route block.".to_string()
     } else if trimmed.is_empty() {
         "Configuration file appears to be empty or contains only whitespace.".to_string()
@@ -496,22 +496,22 @@ mod tests {
         let result = parse_with_validate(content);
         assert!(result.is_err());
         let error_msg = result.err().unwrap();
-        
+
         println!("Error message: {}", error_msg);
-        
+
         // Check that error message contains helpful information
         assert!(error_msg.contains("Failed to parse config file"));
         assert!(error_msg.contains("line 1"));
         assert!(error_msg.contains("invalid syntax here"));
     }
 
-    #[test] 
+    #[test]
     fn test_parse_with_validate_improved_error_messages_missing_brace() {
         let content = "example.com { route / { file index.html ";
         let result = parse_with_validate(content);
         assert!(result.is_err());
         let error_msg = result.err().unwrap();
-        
+
         // Check that error message suggests missing brace
         assert!(error_msg.contains("Failed to parse config file"));
         assert!(error_msg.contains("line 1"));
@@ -529,7 +529,7 @@ example.com {
         let result = parse_with_validate(content);
         assert!(result.is_err());
         let error_msg = result.err().unwrap();
-        
+
         // Should provide line number information for multiline configs
         assert!(error_msg.contains("Failed to parse config file"));
         assert!(error_msg.contains("line"));
@@ -538,18 +538,26 @@ example.com {
     #[test]
     fn test_format_parse_error_with_suggestions() {
         use chico_file::parse_config;
-        
+
         let test_cases = vec![
             ("", "Unexpected end of file"),
-            ("example.com", "Domain definitions should be followed by a block"),
+            (
+                "example.com",
+                "Domain definitions should be followed by a block",
+            ),
             ("example.com { route", "configuration syntax"),
         ];
-        
+
         for (input, expected_part) in test_cases {
             if let Err(parse_err) = parse_config(input) {
                 let formatted = crate::config::format_parse_error(input, parse_err);
-                assert!(formatted.contains(expected_part), 
-                    "Expected '{}' to contain '{}' for input '{}'", formatted, expected_part, input);
+                assert!(
+                    formatted.contains(expected_part),
+                    "Expected '{}' to contain '{}' for input '{}'",
+                    formatted,
+                    expected_part,
+                    input
+                );
             }
         }
     }
