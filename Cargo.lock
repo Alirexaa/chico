@@ -275,6 +275,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "mimee",
+ "nom",
  "predicates",
  "reqwest",
  "rstest",
