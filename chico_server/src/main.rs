@@ -7,6 +7,7 @@ mod cli;
 mod config;
 mod handlers;
 mod load_balance;
+mod plan;
 mod server;
 #[cfg(test)]
 mod test_utils;

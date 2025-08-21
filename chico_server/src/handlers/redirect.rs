@@ -1,11 +1,17 @@
-use chico_file::types;
 use http::{Response, StatusCode};
 
 use super::{full, RequestHandler};
 
 #[derive(PartialEq, Debug)]
 pub struct RedirectHandler {
-    pub handler: types::Handler,
+    path: String,
+    status_code: Option<u16>,
+}
+
+impl RedirectHandler {
+    pub fn new(path: String, status_code: Option<u16>) -> Self {
+        Self { path, status_code }
+    }
 }
 
 impl RequestHandler for RedirectHandler {
@@ -15,28 +21,20 @@ impl RequestHandler for RedirectHandler {
         B::Data: Send,
         B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
     {
-        if let types::Handler::Redirect { path, status_code } = &self.handler {
-            // Based on chico file path is always some
-            let path = path.clone().expect("Expected path value not provided.");
-            let status_code = status_code.unwrap_or(StatusCode::FOUND.as_u16());
+        let path = &self.path;
 
-            Response::builder()
-                .status(status_code)
-                .header(http::header::LOCATION, path)
-                .body(full(""))
-                .unwrap()
-        } else {
-            unimplemented!(
-                "Only redirect handler is supported. Given handler was {}",
-                self.handler.type_name()
-            )
-        }
+        let status_code = self.status_code.unwrap_or(StatusCode::FOUND.as_u16());
+
+        Response::builder()
+            .status(status_code)
+            .header(http::header::LOCATION, path)
+            .body(full(""))
+            .unwrap()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use chico_file::types;
     use http::{Request, StatusCode};
 
     use crate::{handlers::RequestHandler, test_utils::MockBody};
@@ -45,12 +43,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_redirect_handler_not_specified_status() {
-        let redirect_handler = RedirectHandler {
-            handler: types::Handler::Redirect {
-                path: Some("/new-path".to_string()),
-                status_code: None,
-            },
-        };
+        let redirect_handler = RedirectHandler::new("/new-path".to_string(), None);
 
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
@@ -71,12 +64,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_redirect_handler_specified_status() {
-        let redirect_handler = RedirectHandler {
-            handler: types::Handler::Redirect {
-                path: Some("/new-path".to_string()),
-                status_code: Some(307),
-            },
-        };
+        let redirect_handler = RedirectHandler::new("/new-path".to_string(), Some(307));
 
         let request_body: MockBody = MockBody::new(b"");
         let request = Request::builder().body(request_body).unwrap();
