@@ -432,7 +432,7 @@ example.com {
             ),
             (
                 "example.com { route",
-                "Expected domain name followed by configuration block",
+                "Missing closing braces", // Updated to expect the new improved error message
             ),
         ];
 
