@@ -60,11 +60,30 @@ localhost {
     route / {
         file index.html
     }
+    
+    # Simple proxy (backward compatible)
     route /api/* {
         proxy http://localhost:3000
         cors
         rate_limit 10
     }
+    
+    # Advanced proxy with load balancing
+    route /load-balanced/* {
+        proxy {
+            upstreams http://backend1:8080 http://backend2:8080 http://backend3:8080
+            lb_policy round_robin
+        }
+        cors
+    }
+    
+    # Single upstream using new syntax
+    route /single-backend/* {
+        proxy {
+            upstreams http://backend:9000
+        }
+    }
+    
     route /static-response {
         respond "Hello, world!"
     }
@@ -82,6 +101,33 @@ localhost {
     }
 }
 ```
+
+#### Proxy Configuration
+
+Chico supports two proxy configuration formats:
+
+**Simple Proxy (Backward Compatible):**
+```
+route /api/* {
+    proxy http://backend:3000
+}
+```
+
+**Advanced Proxy with Load Balancing:**
+```
+route /api/* {
+    proxy {
+        upstreams http://backend1:8080 http://backend2:8080 http://backend3:8080
+        lb_policy round_robin
+    }
+}
+```
+
+The `lb_policy` supports:
+- Empty value (default): Uses no load balancer for single upstream
+- `round_robin`: Distributes requests evenly across multiple upstreams
+
+When multiple upstreams are specified without `lb_policy`, it defaults to `round_robin`.
 
 ### Testing
 
