@@ -186,12 +186,20 @@ fn parse_proxy_block(input: &str) -> IResult<&str, types::Handler> {
 fn parse_proxy_block_contents(input: &str) -> IResult<&str, (Vec<Upstream>, Option<String>)> {
     let (input, _) = multispace0(input)?;
 
+    // Allow comments before upstreams
+    let (input, _) = many0(parse_comment)(input)?;
+    let (input, _) = multispace0(input)?;
+
     // Parse upstreams line
     let (input, _) = tag("upstreams")(input)?;
     let (input, _) = multispace1(input)?;
 
     // Parse upstream addresses until we hit a newline or lb_policy keyword
     let (input, upstreams) = parse_upstream_addresses(input)?;
+    let (input, _) = multispace0(input)?;
+
+    // Allow comments before lb_policy
+    let (input, _) = many0(parse_comment)(input)?;
     let (input, _) = multispace0(input)?;
 
     // Check for lb_policy
@@ -205,6 +213,10 @@ fn parse_proxy_block_contents(input: &str) -> IResult<&str, (Vec<Upstream>, Opti
 
     let (input, _) = multispace0(input)?;
 
+    // Allow comments after lb_policy
+    let (input, _) = many0(parse_comment)(input)?;
+    let (input, _) = multispace0(input)?;
+
     let policy_str = lb_policy.and_then(|(_, policy_opt)| policy_opt.map(|s| s.to_string()));
 
     Ok((input, (upstreams, policy_str)))
@@ -216,11 +228,13 @@ fn parse_upstream_addresses(input: &str) -> IResult<&str, Vec<Upstream>> {
     let mut remaining = input;
 
     loop {
-        // Skip whitespace
+        // Skip whitespace and comments
         let (next_input, _) = multispace0(remaining)?;
+        let (next_input, _) = many0(parse_comment)(next_input)?;
+        let (next_input, _) = multispace0(next_input)?;
         remaining = next_input;
 
-        // Check if we've hit lb_policy or }
+        // Check if we've hit lb_policy or } or end
         if remaining.starts_with("lb_policy") || remaining.starts_with("}") || remaining.is_empty()
         {
             break;
@@ -847,6 +861,35 @@ mod tests {
                         Upstream::new("http://host1:8080".to_string()).unwrap(),
                         Upstream::new("http://host2:8080".to_string()).unwrap(),
                     ]))
+                ))
+            );
+        }
+
+        #[test]
+        fn test_parse_handler_proxy_block_with_comments() {
+            let input = "proxy {\n  # Comment before upstreams\n  upstreams http://host1:8080 http://host2:8080\n  # Comment before lb_policy\n  lb_policy round_robin\n  # Comment after lb_policy\n}";
+            assert_eq!(
+                parse_handler(input),
+                Ok((
+                    "",
+                    types::Handler::Proxy(types::LoadBalancer::RoundRobin(vec![
+                        Upstream::new("http://host1:8080".to_string()).unwrap(),
+                        Upstream::new("http://host2:8080".to_string()).unwrap(),
+                    ]))
+                ))
+            );
+        }
+
+        #[test]
+        fn test_parse_handler_proxy_block_single_upstream_with_comments() {
+            let input = "proxy {\n  # This is a comment\n  upstreams http://localhost:3000\n  # Another comment\n}";
+            assert_eq!(
+                parse_handler(input),
+                Ok((
+                    "",
+                    types::Handler::Proxy(types::LoadBalancer::NoBalancer(
+                        Upstream::new("http://localhost:3000".to_string()).unwrap()
+                    ))
                 ))
             );
         }
@@ -1516,34 +1559,43 @@ mod tests {
         }
 
         #[test]
-        fn test_parse_config_with_new_proxy_syntax() {
+        fn test_parse_config_with_new_proxy_syntax_and_comments() {
             let config_str = r#"
-            # Server with new proxy syntax
+            # Server with new proxy syntax and comments
             localhost {
                 # Old syntax (backward compatibility)  
                 route /old-proxy {
-                    proxy http://old-upstream:3000
+                    # Inline comment
+                    proxy http://old-upstream:3000 # This is a comment
                 }
                 
-                # New syntax - single upstream
+                # New syntax - single upstream with comments
                 route /single-proxy {
                     proxy {
+                        # Comment before upstreams
                         upstreams http://new-upstream:4000
+                        # Comment after single upstream
                     }
                 }
                 
-                # New syntax - multiple upstreams with explicit round_robin
+                # New syntax - multiple upstreams with comments  
                 route /multi-proxy {
                     proxy {
+                        # This proxy has multiple upstreams
                         upstreams http://backend1:5000 http://backend2:5000 http://backend3:5000  
+                        # Load balancing policy
                         lb_policy round_robin
+                        # End of proxy config
                     }
                 }
                 
-                # New syntax - multiple upstreams (defaults to round_robin)
-                route /auto-multi-proxy {
+                # New syntax - multiple upstreams with comments on separate lines
+                route /multi-proxy-2 {
                     proxy {
-                        upstreams http://auto1:6000 http://auto2:6000
+                        # Multiple upstreams with inline comments  
+                        upstreams http://backend4:6000 # first server
+                                 http://backend5:6000 # second server
+                        # Auto round robin since multiple upstreams
                     }
                 }
             }
@@ -1567,7 +1619,7 @@ mod tests {
                 types::Handler::Proxy(types::LoadBalancer::NoBalancer(_))
             ));
 
-            // Check single upstream route
+            // Check single upstream with comments route
             let single_route = &vh.routes[1];
             assert_eq!(single_route.path, "/single-proxy");
             assert!(matches!(
@@ -1586,11 +1638,11 @@ mod tests {
                 panic!("Expected RoundRobin load balancer");
             }
 
-            // Check auto multi upstream (defaults to round_robin)
-            let auto_route = &vh.routes[3];
-            assert_eq!(auto_route.path, "/auto-multi-proxy");
+            // Check the second multi upstream route
+            let multi_route_2 = &vh.routes[3];
+            assert_eq!(multi_route_2.path, "/multi-proxy-2");
             if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
-                &auto_route.handler
+                &multi_route_2.handler
             {
                 assert_eq!(upstreams.len(), 2);
             } else {
