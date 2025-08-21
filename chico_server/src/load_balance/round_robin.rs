@@ -13,7 +13,7 @@
 //!     "1.0.0.1:9090".parse().unwrap(),
 //! ];
 //! let balancer = RoundRobinBalancer::new(nodes);
-//! let next = balancer.next();
+//! let node = balancer.get_node();
 //! ```
 
 use std::sync::{
@@ -60,7 +60,7 @@ impl RoundRobinBalancer {
     /// If the node list is empty, returns `None`.
     ///
     /// This method is safe to call from multiple threads concurrently.
-    pub fn next(&self) -> Option<Arc<Node>> {
+    fn next(&self) -> Option<Arc<Node>> {
         let len = self.nodes.len();
         if len == 0 {
             return None;
@@ -97,7 +97,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_round_robin_balancer_next() {
+    fn test_round_robin_balancer() {
         let nodes: Vec<Node> = vec![
             "127.0.0.1:80".parse().unwrap(),
             "1.0.0.1:9090".parse().unwrap(),
@@ -106,16 +106,25 @@ mod tests {
         let balancer = RoundRobinBalancer::new(nodes);
 
         for _ in 0..=RESET_THRESHOLD + 1 {
-            assert_some_eq!(balancer.next(), Arc::new("127.0.0.1:80".parse().unwrap()));
-            assert_some_eq!(balancer.next(), Arc::new("1.0.0.1:9090".parse().unwrap()));
-            assert_some_eq!(balancer.next(), Arc::new("1.0.0.2:8080".parse().unwrap()));
+            assert_some_eq!(
+                balancer.get_node(),
+                Arc::new("127.0.0.1:80".parse().unwrap())
+            );
+            assert_some_eq!(
+                balancer.get_node(),
+                Arc::new("1.0.0.1:9090".parse().unwrap())
+            );
+            assert_some_eq!(
+                balancer.get_node(),
+                Arc::new("1.0.0.2:8080".parse().unwrap())
+            );
         }
     }
 
     #[test]
     fn test_empty_nodes() {
         let balancer = RoundRobinBalancer::new(vec![]);
-        assert!(balancer.next().is_none());
+        assert!(balancer.get_node().is_none());
     }
 
     #[test]
@@ -124,7 +133,7 @@ mod tests {
         let balancer = RoundRobinBalancer::new(vec![node]);
         for _ in 0..100 {
             assert_eq!(
-                balancer.next().unwrap(),
+                balancer.get_node().unwrap(),
                 Arc::new("127.0.0.1:80".parse().unwrap())
             );
         }
@@ -143,9 +152,9 @@ mod tests {
             .counter
             .store(RESET_THRESHOLD - 1, Ordering::Relaxed);
 
-        // Trigger next() enough to cross threshold and reset
+        // Trigger get_node() enough to cross threshold and reset
         for _ in 0..5 {
-            let _ = balancer.next();
+            let _ = balancer.get_node();
         }
 
         let val_after_reset = balancer.counter.load(Ordering::Relaxed);
@@ -178,7 +187,7 @@ mod tests {
 
             handles.push(std::thread::spawn(move || {
                 for _ in 0..iterations_per_thread {
-                    if let Some(node) = balancer.next() {
+                    if let Some(node) = balancer.get_node() {
                         let mut counts = result_counts.lock().unwrap();
 
                         if let Some((_, count)) = counts.iter_mut().find(|(n, _)| n == &*node) {
