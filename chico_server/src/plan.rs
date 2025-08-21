@@ -18,7 +18,7 @@ pub struct ServerPlan {
 
 impl ServerPlan {
     pub fn find_virtual_host(&self, host: &str, port: u16) -> Option<&VirtualHostPlan> {
-        //todo: do more advance search and pattern matching for virtual host
+        //todo: do more advanced search and pattern matching for virtual host
         let vh = self.virtual_hosts.iter().find(|&vh| {
             Uri::from_str(&vh.1.domain).unwrap().host().unwrap() == host && vh.1.get_port() == port
         });
@@ -36,7 +36,7 @@ pub struct VirtualHostPlan {
 
 impl VirtualHostPlan {
     pub fn find_route(&self, path: &str) -> Option<&RoutePlan> {
-        //todo: do more advance search and pattern matching for request path
+        //todo: do more advanced search and pattern matching for request path
         let route = self.routes.iter().find(|&r| {
             if r.0.ends_with("/*") {
                 let asterisk_index = r.0.rfind("*").unwrap();
@@ -121,5 +121,77 @@ impl ServerPlan {
         ServerPlan {
             virtual_hosts: vhosts,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use std::collections::HashMap;
+
+    use claims::assert_some;
+    use rstest::rstest;
+
+    use crate::{
+        handlers::file::FileHandler,
+        plan::{RoutePlan, VirtualHostPlan},
+    };
+
+    #[rstest]
+    #[case("/", "/")]
+    #[case("/blog", "/blog")]
+    #[case("/blog/*", "/blog/post1")]
+    #[case("/*", "/blog")]
+    #[case("/*", "/blog/post1")]
+    #[case("/*", "/api")]
+    #[case("/*", "/api/products")]
+    #[case("/*", "/api/products/get")]
+    #[case("/api/*", "/api/products/get")]
+    #[case("/api/products/*", "/api/products/get")]
+    #[case("/api/products/get/*", "/api/products/get/1")]
+    fn test_find_route_success(#[case] path: &str, #[case] search_value: &str) {
+        let mut routes = HashMap::new();
+        let route_plan = RoutePlan::File(FileHandler::new("".to_string(), path.to_string()));
+        routes.insert(path.to_string(), route_plan);
+
+        let virtual_hosts = VirtualHostPlan {
+            domain: "".to_string(),
+            routes: routes,
+        };
+
+        let route = assert_some!(virtual_hosts.find_route(search_value));
+        match route {
+            RoutePlan::File(handler) => {
+                assert_eq!(handler.path, "");
+                assert_eq!(handler.route, path);
+            }
+            _ => {
+                panic!("Unexpected route type")
+            }
+        }
+    }
+
+    #[rstest]
+    #[case("/", "/blog")]
+    #[case("/blog", "/blog/posts")]
+    #[case("/blog/", "/blog/posts")]
+    #[case("/blog/posts", "/blog/posts/post1")]
+    #[case("/api/prod", "/api/products")]
+    #[case("/", "/api/products/get")]
+    #[case("/api/products/*", "/api")]
+    #[case("/api/products", "/api/products/get")]
+    #[case("/api/products/get/*", "/api/products/get")]
+    fn test_find_route_fail(#[case] path: &str, #[case] search_value: &str) {
+        let mut routes = HashMap::new();
+        let route_plan = RoutePlan::File(FileHandler::new("".to_string(), path.to_string()));
+        routes.insert(path.to_string(), route_plan);
+
+        let virtual_hosts = VirtualHostPlan {
+            domain: "".to_string(),
+            routes: routes,
+        };
+
+        let route = virtual_hosts.find_route(search_value);
+        assert!(route.is_none(), "Expected no route to be found");
     }
 }
