@@ -156,7 +156,7 @@ mod tests {
 
         let virtual_hosts = VirtualHostPlan {
             domain: "".to_string(),
-            routes: routes,
+            routes,
         };
 
         let route = assert_some!(virtual_hosts.find_route(search_value));
@@ -188,7 +188,7 @@ mod tests {
 
         let virtual_hosts = VirtualHostPlan {
             domain: "".to_string(),
-            routes: routes,
+            routes,
         };
 
         let route = virtual_hosts.find_route(search_value);
