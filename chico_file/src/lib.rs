@@ -1693,6 +1693,245 @@ mod tests {
         }
 
         #[test]
+        fn test_multiline_upstream_basic() {
+            let input = r#"
+        localhost {
+            route /api/* {
+                proxy {
+                    upstreams http://backend1:8080
+                             http://backend2:8080
+                             http://backend3:8080
+                    lb_policy round_robin
+                }
+            }
+        }
+        "#;
+            let result = parse_config(input);
+            assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
+
+            let (_, config) = result.unwrap();
+            assert_eq!(config.virtual_hosts.len(), 1);
+
+            let route = &config.virtual_hosts[0].routes[0];
+            if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
+                &route.handler
+            {
+                assert_eq!(upstreams.len(), 3);
+            } else {
+                panic!("Expected RoundRobin load balancer with 3 upstreams");
+            }
+        }
+
+        #[test]
+        fn test_multiline_upstream_with_comments() {
+            let input = r#"
+        localhost {
+            route /api/* {
+                proxy {
+                    upstreams http://backend1:8080  # First backend
+                             http://backend2:8080  # Second backend
+                             http://backend3:8080  # Third backend
+                    lb_policy round_robin
+                }
+            }
+        }
+        "#;
+            let result = parse_config(input);
+            assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
+
+            let (_, config) = result.unwrap();
+            let route = &config.virtual_hosts[0].routes[0];
+            if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
+                &route.handler
+            {
+                assert_eq!(upstreams.len(), 3);
+            } else {
+                panic!("Expected RoundRobin load balancer with 3 upstreams");
+            }
+        }
+
+        #[test]
+        fn test_multiline_upstream_mixed_with_newlines() {
+            let input = r#"
+        localhost {
+            route /api/* {
+                proxy {
+                    upstreams http://backend1:8080
+
+                             http://backend2:8080
+                             
+                             http://backend3:8080
+                             
+                    lb_policy round_robin
+                }
+            }
+        }
+        "#;
+            let result = parse_config(input);
+            assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
+
+            let (_, config) = result.unwrap();
+            let route = &config.virtual_hosts[0].routes[0];
+            if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
+                &route.handler
+            {
+                assert_eq!(upstreams.len(), 3);
+            } else {
+                panic!("Expected RoundRobin load balancer with 3 upstreams");
+            }
+        }
+
+        #[test]
+        fn test_multiline_upstream_different_indentation() {
+            let input = r#"
+        localhost {
+            route /api/* {
+                proxy {
+                    upstreams http://backend1:8080
+        http://backend2:8080
+            http://backend3:8080
+                    lb_policy round_robin
+                }
+            }
+        }
+        "#;
+            let result = parse_config(input);
+            assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
+
+            let (_, config) = result.unwrap();
+            let route = &config.virtual_hosts[0].routes[0];
+            if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
+                &route.handler
+            {
+                assert_eq!(upstreams.len(), 3);
+            } else {
+                panic!("Expected RoundRobin load balancer with 3 upstreams");
+            }
+        }
+
+        #[test]
+        fn test_multiline_upstream_one_per_line_with_first_upstream() {
+            let input = r#"
+        localhost {
+            route /api/* {
+                proxy {
+                    upstreams http://backend1:8080
+                              http://backend2:8080
+                              http://backend3:8080
+                }
+            }
+        }
+        "#;
+            let result = parse_config(input);
+            assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
+
+            let (_, config) = result.unwrap();
+            let route = &config.virtual_hosts[0].routes[0];
+            if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
+                &route.handler
+            {
+                assert_eq!(upstreams.len(), 3);
+            } else {
+                panic!("Expected RoundRobin load balancer with 3 upstreams");
+            }
+        }
+
+        #[test]
+        fn test_multiline_upstream_tab_indentation() {
+            let input = "
+        localhost {
+            route /api/* {
+                proxy {
+                    upstreams http://backend1:8080
+\t\t\t\t              http://backend2:8080
+\t\t\t\t              http://backend3:8080
+                    lb_policy round_robin
+                }
+            }
+        }
+        ";
+            let result = parse_config(input);
+            assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
+
+            let (_, config) = result.unwrap();
+            let route = &config.virtual_hosts[0].routes[0];
+            if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
+                &route.handler
+            {
+                assert_eq!(upstreams.len(), 3);
+            } else {
+                panic!("Expected RoundRobin load balancer with 3 upstreams");
+            }
+        }
+
+        #[test]
+        fn test_multiline_upstream_comments_between_lines() {
+            let input = r#"
+        localhost {
+            route /api/* {
+                proxy {
+                    upstreams http://backend1:8080
+                              # Comment between upstreams  
+                              http://backend2:8080
+                              # Another comment
+                              http://backend3:8080
+                    # Comment before policy
+                    lb_policy round_robin
+                }
+            }
+        }
+        "#;
+            let result = parse_config(input);
+            assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
+
+            let (_, config) = result.unwrap();
+            let route = &config.virtual_hosts[0].routes[0];
+            if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
+                &route.handler
+            {
+                assert_eq!(upstreams.len(), 3);
+            } else {
+                panic!("Expected RoundRobin load balancer with 3 upstreams");
+            }
+        }
+
+        #[test]
+        fn test_multiline_upstream_upstreams_on_separate_line() {
+            let input = r#"
+        localhost {
+            route /api/* {
+                proxy {
+                    upstreams 
+                        http://backend1:8080
+                        http://backend2:8080
+                        http://backend3:8080
+                    lb_policy round_robin
+                }
+            }
+        }
+        "#;
+            // Let's see what happens - maybe the parser supports this
+            let result = parse_config(input);
+            if result.is_ok() {
+                let (_, config) = result.unwrap();
+                let route = &config.virtual_hosts[0].routes[0];
+                if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
+                    &route.handler
+                {
+                    assert_eq!(upstreams.len(), 3);
+                    println!(
+                        "Success: parsed {} upstreams when upstreams keyword is on separate line",
+                        upstreams.len()
+                    );
+                } else {
+                    panic!("Expected RoundRobin load balancer with upstreams");
+                }
+            } else {
+                panic!("Parsing failed: {:?}", result.err());
+            }
+        }
+
+        #[test]
         fn test_parse_config_full() {
             let input = r#"
     # This is comment
