@@ -430,7 +430,10 @@ example.com {
                 "example.com",
                 "Domain definitions should be followed by a block",
             ),
-            ("example.com { route", "configuration syntax"),
+            (
+                "example.com { route",
+                "Expected domain name followed by configuration block",
+            ),
         ];
 
         for (input, expected_part) in test_cases {

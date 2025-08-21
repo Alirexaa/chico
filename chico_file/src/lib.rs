@@ -18,120 +18,6 @@ use crate::types::Upstream;
 
 pub mod types;
 
-/// Convert nom parsing errors into user-friendly error messages
-fn format_parse_error(input: &str, error: nom::Err<Error<&str>>) -> String {
-    match error {
-        nom::Err::Error(e) | nom::Err::Failure(e) => {
-            let error_location = find_error_location(input, e.input);
-            let context = get_error_context(e.input);
-
-            match e.code {
-                ErrorKind::Tag => {
-                    if e.input.is_empty() {
-                        "Unexpected end of file. The configuration appears to be incomplete."
-                            .to_string()
-                    } else {
-                        let suggestion = suggest_fix_for_content(e.input);
-                        format!(
-                            "Syntax error near{}: '{}'. {}",
-                            error_location, context, suggestion
-                        )
-                    }
-                }
-                ErrorKind::Char => {
-                    format!(
-                        "Expected a specific character near{}: '{}'. Check for missing braces or other syntax elements.",
-                        error_location,
-                        context
-                    )
-                }
-                ErrorKind::Alt => {
-                    let suggestion = suggest_fix_for_content(e.input);
-                    format!(
-                        "Invalid syntax near{}: '{}'. {}",
-                        error_location, context, suggestion
-                    )
-                }
-                ErrorKind::Many1 => {
-                    "Expected at least one virtual host definition in the configuration file."
-                        .to_string()
-                }
-                _ => {
-                    format!(
-                        "Parse error near{}: '{}'. Please check the syntax of your configuration.",
-                        error_location, context
-                    )
-                }
-            }
-        }
-        nom::Err::Incomplete(_) => {
-            "Configuration file appears to be incomplete or truncated.".to_string()
-        }
-    }
-}
-
-/// Find the approximate line and column number where the error occurred
-fn find_error_location(full_input: &str, error_input: &str) -> String {
-    // Calculate position where error occurred
-    let error_pos = full_input.len() - error_input.len();
-
-    // Count lines and find column
-    let mut line = 1;
-    let mut col = 1;
-
-    for (i, ch) in full_input.chars().enumerate() {
-        if i >= error_pos {
-            break;
-        }
-        if ch == '\n' {
-            line += 1;
-            col = 1;
-        } else {
-            col += 1;
-        }
-    }
-
-    format!(" line {}, column {}", line, col)
-}
-
-/// Get a snippet of context around the error location for display
-fn get_error_context(error_input: &str) -> String {
-    // Take the first 30 characters or until newline, whichever is shorter
-    let context: String = error_input
-        .chars()
-        .take(30)
-        .take_while(|&c| c != '\n')
-        .collect();
-
-    if context.len() < error_input.len() {
-        format!("{}...", context)
-    } else {
-        context
-    }
-}
-
-/// Provide suggestions for common configuration errors
-fn suggest_fix_for_content(error_input: &str) -> String {
-    let trimmed = error_input.trim();
-
-    if trimmed.starts_with('{') && !trimmed.contains('}') {
-        "Check for missing closing brace '}'.".to_string()
-    } else if trimmed.contains("route") && !trimmed.contains('{') {
-        "Route definitions should be followed by a block enclosed in braces { }.".to_string()
-    } else if trimmed.chars().any(|c| c.is_alphabetic()) && !trimmed.contains('{') {
-        "Domain definitions should be followed by a block enclosed in braces { }.".to_string()
-    } else if trimmed.starts_with("proxy")
-        || trimmed.starts_with("file")
-        || trimmed.starts_with("respond")
-    {
-        "Handler definitions should be inside a route block.".to_string()
-    } else if trimmed.is_empty() {
-        "Configuration file appears to be empty or contains only whitespace.".to_string()
-    } else {
-        "Check the configuration syntax - ensure domains, routes, and handlers are properly defined.".to_string()
-    }
-}
-
 // Parses a single-line comment like "# this is a comment"
 fn parse_comment(input: &str) -> IResult<&str, ()> {
     let (input, _) = multispace0(input)?;
@@ -506,6 +392,261 @@ fn parse_redirect_handler_args(input: &str) -> IResult<&str, (Option<u16>, Optio
 }
 
 // Parses the entire configuration, allowing comments and empty lines
+/// Convert nom parsing errors into user-friendly error messages
+fn format_parse_error(input: &str, error: nom::Err<Error<&str>>) -> String {
+    match error {
+        nom::Err::Error(e) | nom::Err::Failure(e) => {
+            let error_location = find_error_location(input, e.input);
+            let context = get_error_context(e.input);
+
+            // Determine parsing context for more specific error messages
+            let parsing_context = determine_parsing_context(input, e.input);
+
+            match e.code {
+                ErrorKind::Tag => {
+                    if e.input.is_empty() {
+                        "Unexpected end of file. The configuration appears to be incomplete."
+                            .to_string()
+                    } else {
+                        let suggestion = get_context_specific_suggestion(&parsing_context, e.input);
+                        format!(
+                            "Syntax error near{}: '{}'. {}",
+                            error_location, context, suggestion
+                        )
+                    }
+                }
+                ErrorKind::Char => {
+                    let suggestion = get_context_specific_suggestion(&parsing_context, e.input);
+                    format!(
+                        "Expected a specific character near{}: '{}'. {}",
+                        error_location, context, suggestion
+                    )
+                }
+                ErrorKind::Alt => {
+                    let suggestion = get_context_specific_suggestion(&parsing_context, e.input);
+                    format!(
+                        "Invalid syntax near{}: '{}'. {}",
+                        error_location, context, suggestion
+                    )
+                }
+                ErrorKind::Many1 => {
+                    "Expected at least one virtual host definition in the configuration file."
+                        .to_string()
+                }
+                _ => {
+                    let suggestion = get_context_specific_suggestion(&parsing_context, e.input);
+                    format!(
+                        "Parse error near{}: '{}'. {}",
+                        error_location, context, suggestion
+                    )
+                }
+            }
+        }
+        nom::Err::Incomplete(_) => {
+            "Configuration file appears to be incomplete or truncated.".to_string()
+        }
+    }
+}
+
+/// Determine what we were parsing when the error occurred
+fn determine_parsing_context(full_input: &str, error_input: &str) -> String {
+    let error_pos = full_input.len() - error_input.len();
+    let before_error = &full_input[..error_pos];
+
+    // Count braces to understand structure depth
+    let open_braces = before_error.chars().filter(|&c| c == '{').count();
+    let close_braces = before_error.chars().filter(|&c| c == '}').count();
+    let brace_depth = open_braces.saturating_sub(close_braces);
+
+    // Look for keywords in reverse order (most recent first)
+    let mut found_route = false;
+    let mut found_proxy = false;
+    let mut found_handler = false;
+    let mut found_middleware = false;
+
+    // Check the last few "words" in the input before the error
+    let words: Vec<&str> = before_error.split_whitespace().collect();
+    let last_words: Vec<&str> = words.iter().rev().take(10).copied().collect();
+
+    for &word in &last_words {
+        if word == "route" {
+            found_route = true;
+            break;
+        } else if word == "proxy"
+            || word == "file"
+            || word == "respond"
+            || word == "redirect"
+            || word == "dir"
+            || word == "browse"
+        {
+            found_handler = true;
+            break;
+        } else if word == "upstreams" {
+            found_proxy = true;
+            break;
+        } else if word == "gzip"
+            || word == "cors"
+            || word == "rate_limit"
+            || word == "auth"
+            || word == "cache"
+            || word == "header"
+        {
+            found_middleware = true;
+            break;
+        }
+    }
+
+    // Determine context based on depth and keywords
+    if brace_depth >= 2 && found_proxy {
+        "proxy_upstreams".to_string()
+    } else if brace_depth >= 2 && found_handler {
+        "handler_definition".to_string()
+    } else if brace_depth >= 2 && found_middleware {
+        "middleware_definition".to_string()
+    } else if brace_depth >= 2 && found_route {
+        "route_contents".to_string()
+    } else if brace_depth == 1 && found_route {
+        "route_definition".to_string()
+    } else if brace_depth == 1 {
+        "virtual_host_contents".to_string()
+    } else if found_route && brace_depth == 0 {
+        "route_definition".to_string()
+    } else {
+        "virtual_host_definition".to_string()
+    }
+}
+
+/// Get specific suggestions based on parsing context
+fn get_context_specific_suggestion(context: &str, error_input: &str) -> String {
+    let trimmed = error_input.trim();
+
+    match context {
+        "virtual_host_definition" => {
+            if trimmed.chars().any(|c| c.is_alphabetic()) && !trimmed.contains('{') {
+                "Domain definitions should be followed by a block enclosed in braces { }.".to_string()
+            } else {
+                "Expected domain name followed by configuration block. Example: 'example.com { ... }'.".to_string()
+            }
+        }
+        "virtual_host_contents" => {
+            "Virtual host block should contain route definitions. Example: 'route / { file index.html }'.".to_string()
+        }
+        "route_definition" => {
+            if trimmed.starts_with("route") && !trimmed.contains('{') {
+                "Route definitions should be followed by a block enclosed in braces { }.".to_string()
+            } else {
+                "Expected route path after 'route' keyword. Example: 'route /api { ... }'.".to_string()
+            }
+        }
+        "route_contents" => {
+            "Route block must contain at least one handler (file, proxy, respond, redirect, dir, browse).".to_string()
+        }
+        "handler_definition" => {
+            if trimmed.starts_with("file") {
+                "File handler requires a file path. Example: 'file index.html'.".to_string()
+            } else if trimmed.starts_with("proxy") {
+                "Proxy handler requires an upstream URL or block configuration. Example: 'proxy http://localhost:3000'.".to_string()
+            } else if trimmed.starts_with("respond") {
+                "Respond handler requires status code and/or body. Example: 'respond 200' or 'respond \"Hello\" 200'.".to_string()
+            } else if trimmed.starts_with("redirect") {
+                "Redirect handler requires target path. Example: 'redirect /new-path'.".to_string()
+            } else if trimmed.starts_with("dir") {
+                "Directory handler requires a directory path. Example: 'dir /path/to/static'.".to_string()
+            } else if trimmed.starts_with("browse") {
+                "Browse handler requires a directory path. Example: 'browse /path/to/browse'.".to_string()
+            } else {
+                "Unknown handler type. Valid handlers: file, proxy, dir, browse, respond, redirect.".to_string()
+            }
+        }
+        "proxy_handler" => {
+            if trimmed.contains("upstreams") {
+                "Proxy upstreams require valid URLs with protocol. Example: 'upstreams http://localhost:3000'.".to_string()
+            } else {
+                "Proxy configuration error. Use either 'proxy http://url' or 'proxy { upstreams ... }'.".to_string()
+            }
+        }
+        "proxy_upstreams" => {
+            "Invalid upstream URL. URLs must include protocol (http:// or https://).".to_string()
+        }
+        "middleware_definition" => {
+            if trimmed.starts_with("rate_limit") {
+                "Rate limit middleware requires a number. Example: 'rate_limit 10'.".to_string()
+            } else if trimmed.starts_with("auth") {
+                "Auth middleware requires username and password. Example: 'auth admin password123'.".to_string()
+            } else if trimmed.starts_with("cache") {
+                "Cache middleware requires duration. Example: 'cache 5m'.".to_string()
+            } else if trimmed.starts_with("header") {
+                "Header middleware requires operator and name. Example: 'header +Content-Type text/html'.".to_string()
+            } else {
+                "Unknown middleware type. Valid middleware: gzip, cors, log, rate_limit, auth, cache, header.".to_string()
+            }
+        }
+        _ => suggest_fix_for_content(error_input),
+    }
+}
+
+/// Find the approximate line and column number where the error occurred
+fn find_error_location(full_input: &str, error_input: &str) -> String {
+    // Calculate position where error occurred
+    let error_pos = full_input.len() - error_input.len();
+
+    // Count lines and find column
+    let mut line = 1;
+    let mut col = 1;
+
+    for (i, ch) in full_input.chars().enumerate() {
+        if i >= error_pos {
+            break;
+        }
+        if ch == '\n' {
+            line += 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+    }
+
+    format!(" line {}, column {}", line, col)
+}
+
+/// Get a snippet of context around the error location for display
+fn get_error_context(error_input: &str) -> String {
+    // Take the first 30 characters or until newline, whichever is shorter
+    let context: String = error_input
+        .chars()
+        .take(30)
+        .take_while(|&c| c != '\n')
+        .collect();
+
+    if context.len() < error_input.len() {
+        format!("{}...", context)
+    } else {
+        context
+    }
+}
+
+/// Provide suggestions for common configuration errors
+fn suggest_fix_for_content(error_input: &str) -> String {
+    let trimmed = error_input.trim();
+
+    if trimmed.starts_with('{') && !trimmed.contains('}') {
+        "Check for missing closing brace '}'.".to_string()
+    } else if trimmed.contains("route") && !trimmed.contains('{') {
+        "Route definitions should be followed by a block enclosed in braces { }.".to_string()
+    } else if trimmed.chars().any(|c| c.is_alphabetic()) && !trimmed.contains('{') {
+        "Domain definitions should be followed by a block enclosed in braces { }.".to_string()
+    } else if trimmed.starts_with("proxy")
+        || trimmed.starts_with("file")
+        || trimmed.starts_with("respond")
+    {
+        "Handler definitions should be inside a route block.".to_string()
+    } else if trimmed.is_empty() {
+        "Configuration file appears to be empty or contains only whitespace.".to_string()
+    } else {
+        "Check the configuration syntax - ensure domains, routes, and handlers are properly defined.".to_string()
+    }
+}
+
 pub fn parse_config(input: &str) -> Result<(&str, Config), String> {
     let result: Result<(&str, Vec<VirtualHost>), Err<Error<&str>>> = many1(alt((
         map(parse_virtual_host, Some),
@@ -2317,37 +2458,6 @@ mod tests {
                     }
                 ))
             );
-        }
-
-        #[test]
-        fn test_error_message_formatting() {
-            // Test various error scenarios to ensure error messages are user-friendly
-            let test_cases = vec![
-                ("", "Unexpected end of file"),
-                ("example.com", "Domain definitions should be followed by a block"),
-                ("example.com {", "Unexpected end of file"),
-                ("example.com { route", "configuration syntax"),
-                ("example.com { route / {", "Unexpected end of file"),
-                ("example.com { route / { invalid_handler } }", "invalid_handler"),
-            ];
-
-            for (input, expected_part) in test_cases {
-                match parse_config(input) {
-                    Ok(_) => panic!("Expected error for input: {:?}", input),
-                    Err(error_msg) => {
-                        println!("Input: {:?}", input);
-                        println!("Error: {}", error_msg);
-                        assert!(
-                            error_msg.contains(expected_part) || error_msg.contains("line") || error_msg.contains("column"),
-                            "Expected error message '{}' to contain '{}' or location info for input '{}'",
-                            error_msg,
-                            expected_part,
-                            input
-                        );
-                        println!("✓ Contains expected content or location info\n");
-                    }
-                }
-            }
         }
     }
 }
