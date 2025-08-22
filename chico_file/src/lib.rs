@@ -25,13 +25,25 @@ fn format_parse_error(input: &str, error: nom::Err<Error<&str>>) -> String {
             let error_location = find_error_location(input, e.input);
             let context = get_error_context(e.input);
 
+            // Always use the new context analysis for better error messages
+            let suggestion = analyze_parsing_context(input, e.input);
+
             match e.code {
                 ErrorKind::Tag => {
                     if e.input.is_empty() {
-                        "Unexpected end of file. The configuration appears to be incomplete."
-                            .to_string()
+                        // Check if we can provide a more specific message based on context
+                        if suggestion.contains("Configuration file appears to be empty") {
+                            "Unexpected end of file. The configuration appears to be incomplete."
+                                .to_string()
+                        } else {
+                            format!(
+                                "Failed to parse config file. Syntax error near{}: '{}'. {}",
+                                error_location,
+                                get_parsing_context_snippet(input),
+                                suggestion
+                            )
+                        }
                     } else {
-                        let suggestion = suggest_fix_for_content_with_full_context(input, e.input);
                         format!(
                             "Syntax error near{}: '{}'. {}",
                             error_location, context, suggestion
@@ -40,13 +52,11 @@ fn format_parse_error(input: &str, error: nom::Err<Error<&str>>) -> String {
                 }
                 ErrorKind::Char => {
                     format!(
-                        "Expected a specific character near{}: '{}'. Check for missing braces or other syntax elements.",
-                        error_location,
-                        context
+                        "Expected a specific character near{}: '{}'. {}",
+                        error_location, context, suggestion
                     )
                 }
                 ErrorKind::Alt => {
-                    let suggestion = suggest_fix_for_content_with_full_context(input, e.input);
                     format!(
                         "Invalid syntax near{}: '{}'. {}",
                         error_location, context, suggestion
@@ -57,7 +67,6 @@ fn format_parse_error(input: &str, error: nom::Err<Error<&str>>) -> String {
                         .to_string()
                 }
                 _ => {
-                    let suggestion = suggest_fix_for_content_with_full_context(input, e.input);
                     format!(
                         "Parse error near{}: '{}'. {}",
                         error_location, context, suggestion
@@ -66,7 +75,12 @@ fn format_parse_error(input: &str, error: nom::Err<Error<&str>>) -> String {
             }
         }
         nom::Err::Incomplete(_) => {
-            "Configuration file appears to be incomplete or truncated.".to_string()
+            // For incomplete input, analyze what we were trying to parse
+            let suggestion = analyze_parsing_context(input, "");
+            format!(
+                "Configuration file appears to be incomplete. {}",
+                suggestion
+            )
         }
     }
 }
@@ -111,6 +125,139 @@ fn get_error_context(error_input: &str) -> String {
     }
 }
 
+/// Get a context snippet from the full input to show what was being parsed
+fn get_parsing_context_snippet(input: &str) -> String {
+    // Get the last 30 characters to show what we were parsing
+    let chars: Vec<char> = input.chars().collect();
+    let start = if chars.len() > 30 {
+        chars.len() - 30
+    } else {
+        0
+    };
+    let context: String = chars[start..].iter().collect();
+
+    if start > 0 {
+        format!("...{}", context)
+    } else {
+        context
+    }
+}
+
+/// Analyze the parsing context to provide specific error messages
+fn analyze_parsing_context(full_input: &str, error_input: &str) -> String {
+    // When error_input is empty (usually EOF), analyze the full input to understand context
+    if error_input.is_empty() {
+        return analyze_eof_context(full_input);
+    }
+
+    // For non-empty error input, we need to determine context more intelligently
+    // The error_input tells us what nom was trying to parse when it failed
+
+    // Calculate where in the full input the error occurred
+    let error_pos = full_input.len() - error_input.len();
+    let _before_error = &full_input[..error_pos];
+
+    // Use the enhanced analysis logic from suggest_fix_for_content_with_full_context
+    // but prioritize specific handler/middleware detection over structural errors
+
+    suggest_fix_for_content_with_full_context(full_input, error_input)
+}
+
+/// Analyze context when we hit end-of-file
+fn analyze_eof_context(full_input: &str) -> String {
+    let trimmed_input = full_input.trim();
+
+    if trimmed_input.is_empty() {
+        return "Configuration file appears to be empty or contains only whitespace.".to_string();
+    }
+
+    // Check for incomplete handlers by looking at the end pattern
+    if trimmed_input.ends_with("{ file")
+        || (trimmed_input.contains("{ file")
+            && !trimmed_input.matches("file ").count() > trimmed_input.matches("{ file").count())
+    {
+        return "File handler requires a file path. Example: 'file index.html'.".to_string();
+    }
+
+    if trimmed_input.ends_with("{ proxy")
+        || (trimmed_input.contains("{ proxy")
+            && !trimmed_input.contains("proxy ")
+            && !trimmed_input.contains("proxy {"))
+    {
+        return "Proxy handler requires a URL or configuration block. Example: 'proxy http://localhost:3000' or 'proxy { upstreams ... }'.".to_string();
+    }
+
+    if trimmed_input.ends_with("{ respond")
+        || (trimmed_input.contains("{ respond") && !trimmed_input.contains("respond "))
+    {
+        return "Respond handler requires status code and/or body. Example: 'respond 200' or 'respond \"Hello\" 200'.".to_string();
+    }
+
+    if trimmed_input.ends_with("{ redirect")
+        || (trimmed_input.contains("{ redirect") && !trimmed_input.contains("redirect "))
+    {
+        return "Redirect handler requires a target path. Example: 'redirect /new-path' or 'redirect /new-path 301'.".to_string();
+    }
+
+    if trimmed_input.ends_with("{ dir")
+        || (trimmed_input.contains("{ dir") && !trimmed_input.contains("dir "))
+    {
+        return "Directory handler requires a directory path. Example: 'dir /static'.".to_string();
+    }
+
+    if trimmed_input.ends_with("{ browse")
+        || (trimmed_input.contains("{ browse") && !trimmed_input.contains("browse "))
+    {
+        return "Browse handler requires a directory path. Example: 'browse /files'.".to_string();
+    }
+
+    // Check for incomplete middleware at the end of input
+    if trimmed_input.ends_with("rate_limit") && !trimmed_input.ends_with("rate_limit ") {
+        return "Rate limit middleware requires a number. Example: 'rate_limit 10'.".to_string();
+    }
+
+    if trimmed_input.ends_with("cache") && !trimmed_input.ends_with("cache ") {
+        return "Cache middleware requires a duration. Example: 'cache 5m'.".to_string();
+    }
+
+    if trimmed_input.ends_with("header") && !trimmed_input.ends_with("header ") {
+        return "Header middleware requires operator and name. Example: 'header +Content-Type text/html'.".to_string();
+    }
+
+    if trimmed_input.ends_with("auth") && !trimmed_input.ends_with("auth ") {
+        return "Auth middleware requires username and password. Example: 'auth admin password123'.".to_string();
+    }
+
+    // Check for incomplete proxy configuration
+    if trimmed_input.contains("proxy {") && !trimmed_input.contains("upstreams") {
+        return "Proxy blocks must contain 'upstreams' directive. Example: 'proxy { upstreams http://localhost:3000 }'.".to_string();
+    }
+
+    if trimmed_input.ends_with("upstreams") && !trimmed_input.ends_with("upstreams ") {
+        return "Proxy upstreams require at least one URL. Example: 'upstreams http://localhost:3000'.".to_string();
+    }
+
+    // Check for incomplete routes
+    if trimmed_input.ends_with("route") && !trimmed_input.ends_with("route ") {
+        return "Route definitions require a path and configuration block. Example: 'route /api { ... }'.".to_string();
+    }
+
+    // Check for incomplete virtual host
+    if !trimmed_input.contains('{') && trimmed_input.chars().any(|c| c.is_alphabetic()) {
+        return "Domain definitions should be followed by a block enclosed in braces { }. Example: 'example.com { ... }'.".to_string();
+    }
+
+    // Check for unclosed braces
+    let open_braces = trimmed_input.chars().filter(|&c| c == '{').count();
+    let close_braces = trimmed_input.chars().filter(|&c| c == '}').count();
+    if open_braces > close_braces {
+        return "Missing closing braces. Each '{' must have a corresponding '}'.".to_string();
+    }
+
+    // Fallback for other structural issues
+    "Check the configuration syntax. Ensure proper structure: 'domain { route /path { handler [middleware...] } }'.".to_string()
+}
+
 /// Provide suggestions for common configuration errors with full context analysis
 fn suggest_fix_for_content_with_full_context(full_input: &str, error_input: &str) -> String {
     // Calculate error position in the full input
@@ -124,6 +271,104 @@ fn suggest_fix_for_content_with_full_context(full_input: &str, error_input: &str
 
     if trimmed_error.is_empty() {
         return "Configuration file appears to be empty or contains only whitespace.".to_string();
+    }
+
+    // PRIORITY 0: Check for incomplete handlers at the end of full input
+    // This handles cases like "example.com { route /path { file" where nom fails expecting more content
+    let full_trimmed = full_input.trim();
+
+    // If the error input is the same as the full input, it means nom couldn't parse anything
+    // In this case, we should look at what the full input ends with
+    if error_input.trim() == full_trimmed {
+        if full_trimmed.ends_with("{ file") {
+            return "File handler requires a file path. Example: 'file index.html'.".to_string();
+        }
+
+        if full_trimmed.ends_with("{ proxy") {
+            return "Proxy handler requires a URL or configuration block. Example: 'proxy http://localhost:3000' or 'proxy { upstreams ... }'.".to_string();
+        }
+
+        if full_trimmed.ends_with("{ respond") {
+            return "Respond handler requires status code and/or body. Example: 'respond 200' or 'respond \"Hello\" 200'.".to_string();
+        }
+
+        if full_trimmed.ends_with("{ redirect") {
+            return "Redirect handler requires a target path. Example: 'redirect /new-path' or 'redirect /new-path 301'.".to_string();
+        }
+
+        if full_trimmed.ends_with("{ dir") {
+            return "Directory handler requires a directory path. Example: 'dir /static'."
+                .to_string();
+        }
+
+        if full_trimmed.ends_with("{ browse") {
+            return "Browse handler requires a directory path. Example: 'browse /files'."
+                .to_string();
+        }
+
+        // Check for incomplete middleware at the end
+        if full_trimmed.ends_with("rate_limit") && !full_trimmed.ends_with("rate_limit ") {
+            return "Rate limit middleware requires a number. Example: 'rate_limit 10'."
+                .to_string();
+        }
+
+        if full_trimmed.ends_with("cache") && !full_trimmed.ends_with("cache ") {
+            return "Cache middleware requires a duration. Example: 'cache 5m'.".to_string();
+        }
+
+        if full_trimmed.ends_with("header") && !full_trimmed.ends_with("header ") {
+            return "Header middleware requires operator and name. Example: 'header +Content-Type text/html'.".to_string();
+        }
+
+        if full_trimmed.ends_with("auth") && !full_trimmed.ends_with("auth ") {
+            return "Auth middleware requires username and password. Example: 'auth admin password123'.".to_string();
+        }
+    }
+
+    // If the error input starts with a handler name but the full input ends with just that handler,
+    // it means we have an incomplete handler
+    if error_input.starts_with("file") && full_trimmed.ends_with("{ file") {
+        return "File handler requires a file path. Example: 'file index.html'.".to_string();
+    }
+
+    if error_input.starts_with("proxy")
+        && full_trimmed.ends_with("{ proxy")
+        && !full_trimmed.contains("proxy {")
+    {
+        return "Proxy handler requires a URL or configuration block. Example: 'proxy http://localhost:3000' or 'proxy { upstreams ... }'.".to_string();
+    }
+
+    if error_input.starts_with("respond") && full_trimmed.ends_with("{ respond") {
+        return "Respond handler requires status code and/or body. Example: 'respond 200' or 'respond \"Hello\" 200'.".to_string();
+    }
+
+    if error_input.starts_with("redirect") && full_trimmed.ends_with("{ redirect") {
+        return "Redirect handler requires a target path. Example: 'redirect /new-path' or 'redirect /new-path 301'.".to_string();
+    }
+
+    if error_input.starts_with("dir") && full_trimmed.ends_with("{ dir") {
+        return "Directory handler requires a directory path. Example: 'dir /static'.".to_string();
+    }
+
+    if error_input.starts_with("browse") && full_trimmed.ends_with("{ browse") {
+        return "Browse handler requires a directory path. Example: 'browse /files'.".to_string();
+    }
+
+    // Check for incomplete middleware at the end
+    if error_input.starts_with("rate_limit") && full_trimmed.ends_with("rate_limit") {
+        return "Rate limit middleware requires a number. Example: 'rate_limit 10'.".to_string();
+    }
+
+    if error_input.starts_with("cache") && full_trimmed.ends_with("cache") {
+        return "Cache middleware requires a duration. Example: 'cache 5m'.".to_string();
+    }
+
+    if error_input.starts_with("header") && full_trimmed.ends_with("header") {
+        return "Header middleware requires operator and name. Example: 'header +Content-Type text/html'.".to_string();
+    }
+
+    if error_input.starts_with("auth") && full_trimmed.ends_with("auth") {
+        return "Auth middleware requires username and password. Example: 'auth admin password123'.".to_string();
     }
 
     // Count braces to understand nesting level
@@ -189,8 +434,7 @@ fn suggest_fix_for_content_with_full_context(full_input: &str, error_input: &str
     if before_error.contains("route ") {
         // Look for incomplete handlers after route
         if before_error.contains("{ file") && !before_error.contains("file ") {
-            return "File handler requires a file path. Example: 'file index.html'."
-                .to_string();
+            return "File handler requires a file path. Example: 'file index.html'.".to_string();
         }
         if before_error.contains("{ proxy") && error_input.trim() == "proxy" {
             return "Proxy handler requires a URL or configuration block. Example: 'proxy http://localhost:3000' or 'proxy { upstreams ... }'.".to_string();
@@ -224,17 +468,24 @@ fn suggest_fix_for_content_with_full_context(full_input: &str, error_input: &str
         if before_error.ends_with("header") || trimmed_error.starts_with("header") {
             return "Header middleware requires operator and name. Example: 'header +Content-Type text/html'.".to_string();
         }
-        if (before_error.ends_with("auth") || trimmed_error.starts_with("auth")) && !before_error.contains("auth ") {
+        if (before_error.ends_with("auth") || trimmed_error.starts_with("auth"))
+            && !before_error.contains("auth ")
+        {
             return "Auth middleware requires username and password. Example: 'auth admin password123'.".to_string();
         }
     }
 
     // PRIORITY 1: Handle specific handler errors that we can detect with confidence
     // These should override structural brace errors when we can identify the parsing context
-    
+
     if (in_route && expecting_handler) || brace_depth >= 2 || route_just_opened {
         match *first_error_word {
-            "file" if error_words.len() == 1 || (error_words.len() >= 1 && !error_words.get(1).map_or(false, |w| !w.chars().all(|c| c.is_whitespace() || c == '}'))) => {
+            "file"
+                if !error_words.is_empty()
+                    && error_words
+                        .get(1)
+                        .is_some_and(|w| !w.chars().all(|c| c.is_whitespace() || c == '}')) =>
+            {
                 return "File handler requires a file path. Example: 'file index.html'."
                     .to_string();
             }
@@ -271,8 +522,8 @@ fn suggest_fix_for_content_with_full_context(full_input: &str, error_input: &str
                     "dir",
                     "browse",
                     "upstreams", // Add upstreams to valid keywords to prevent false unknown handler error
-                    "route", // Add route to allow it in the route context detection
-                    "}", // Allow closing brace
+                    "route",     // Add route to allow it in the route context detection
+                    "}",         // Allow closing brace
                 ]
                 .contains(&word) =>
             {
@@ -2876,7 +3127,7 @@ mod tests {
             println!("\n✅ Core improvements validated: Eliminated generic error messages and replaced with specific context-aware guidance!");
         }
 
-        #[test] 
+        #[test]
         fn test_suggest_fix_for_content_with_full_context_comprehensive() {
             println!("\n=== Testing suggest_fix_for_content_with_full_context branches ===");
 
@@ -2895,13 +3146,13 @@ mod tests {
             // Test file handler without path
             assert_eq!(
                 crate::suggest_fix_for_content_with_full_context(
-                    "example.com { route /path { file", 
+                    "example.com { route /path { file",
                     "file"
                 ),
                 "File handler requires a file path. Example: 'file index.html'."
             );
 
-            // Test proxy handler without URL 
+            // Test proxy handler without URL
             assert_eq!(
                 crate::suggest_fix_for_content_with_full_context(
                     "example.com { route /path { proxy", 
@@ -2931,16 +3182,16 @@ mod tests {
             // Test dir handler without path
             assert_eq!(
                 crate::suggest_fix_for_content_with_full_context(
-                    "example.com { route /path { dir", 
+                    "example.com { route /path { dir",
                     "dir"
                 ),
                 "Directory handler requires a directory path. Example: 'dir /static'."
             );
 
-            // Test browse handler without path  
+            // Test browse handler without path
             assert_eq!(
                 crate::suggest_fix_for_content_with_full_context(
-                    "example.com { route /path { browse", 
+                    "example.com { route /path { browse",
                     "browse"
                 ),
                 "Browse handler requires a directory path. Example: 'browse /files'."
@@ -2958,7 +3209,7 @@ mod tests {
             // Test rate_limit middleware without number
             assert_eq!(
                 crate::suggest_fix_for_content_with_full_context(
-                    "example.com { route /path { file index.html\n rate_limit", 
+                    "example.com { route /path { file index.html\n rate_limit",
                     "rate_limit"
                 ),
                 "Rate limit middleware requires a number. Example: 'rate_limit 10'."
@@ -2976,7 +3227,7 @@ mod tests {
             // Test cache middleware without duration
             assert_eq!(
                 crate::suggest_fix_for_content_with_full_context(
-                    "example.com { route /path { file index.html\n cache", 
+                    "example.com { route /path { file index.html\n cache",
                     "cache"
                 ),
                 "Cache middleware requires a duration. Example: 'cache 5m'."
@@ -3002,15 +3253,16 @@ mod tests {
 
             // Test proxy block without upstreams - need to match actual context
             let result = crate::suggest_fix_for_content_with_full_context(
-                "example.com { route /path { proxy {", 
-                "proxy {"
+                "example.com { route /path { proxy {",
+                "proxy {",
             );
             println!("Debug proxy block test result: '{}'", result);
             // This might be a tricky case - let's be flexible about the result
             assert!(
-                result.contains("Proxy blocks must contain 'upstreams'") ||
-                result.contains("Missing closing braces"),
-                "Should show proxy-specific or structural error, got: {}", result
+                result.contains("Proxy blocks must contain 'upstreams'")
+                    || result.contains("Missing closing braces"),
+                "Should show proxy-specific or structural error, got: {}",
+                result
             );
 
             // Test route without braces
@@ -3034,13 +3286,66 @@ mod tests {
             // Test missing closing braces - should only trigger when no specific context is detected
             assert_eq!(
                 crate::suggest_fix_for_content_with_full_context(
-                    "example.com { something_unrecognized {", 
+                    "example.com { something_unrecognized {",
                     "something_unrecognized {"
                 ),
                 "Missing closing braces. Each '{' must have a corresponding '}'."
             );
 
             println!("✅ All branches of suggest_fix_for_content_with_full_context tested!");
+        }
+
+        #[test]
+        fn test_actual_parsing_errors_mentioned_in_comment() {
+            println!("\n=== Testing actual parsing errors mentioned in comment ===");
+
+            let test_config = "example.com { route /path { file";
+            println!("Testing config: '{}'", test_config);
+
+            match crate::parse_config(test_config) {
+                Ok(_) => println!("Parsing succeeded unexpectedly!"),
+                Err(e) => {
+                    println!("Actual error: {}", e);
+
+                    // Check if the actual error contains the expected message
+                    if e.contains("File handler requires a file path") {
+                        println!("✅ SUCCESS: Error message contains expected specific guidance!");
+                    } else {
+                        println!("❌ ISSUE: Error message is still generic, not context-specific");
+                        println!("Expected something like: 'File handler requires a file path. Example: 'file index.html'.'");
+                        println!("Got: {}", e);
+                    }
+                }
+            }
+
+            // Test a few more specific cases
+            let test_cases = vec![
+                ("example.com { route /path { proxy", "Proxy handler"),
+                ("example.com { route /path { respond", "Respond handler"),
+                ("example.com { route /path { redirect", "Redirect handler"),
+                (
+                    "example.com { route /path { file index.html rate_limit",
+                    "Rate limit",
+                ),
+            ];
+
+            for (test, expected_type) in test_cases {
+                println!("\nTesting: '{}'", test);
+                match crate::parse_config(test) {
+                    Err(e) => {
+                        println!("Error: {}", e);
+                        if e.contains("Missing closing braces") {
+                            println!(
+                                "❌ Still showing generic brace error instead of specific {} error",
+                                expected_type
+                            );
+                        } else {
+                            println!("✅ Showing specific {} error guidance", expected_type);
+                        }
+                    }
+                    Ok(_) => println!("Unexpected success"),
+                }
+            }
         }
     }
 }
