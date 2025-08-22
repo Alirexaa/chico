@@ -34,10 +34,8 @@ fn parse_with_validate(content: &str) -> Result<Config, String> {
     let parse_result = parse_config(content);
 
     if parse_result.is_err() {
-        return Err(format!(
-            "Failed to parse config file. reason: {}",
-            parse_result.err().unwrap()
-        ));
+        let formatted_error = parse_result.err().unwrap();
+        return Err(format!("Failed to parse config file. {}", formatted_error));
     }
 
     let config = parse_result.unwrap().1;
@@ -375,5 +373,79 @@ mod tests {
         let (_, config) = parse_config(content).unwrap();
         let ports = config.get_ports();
         assert!(ports.contains(&port));
+    }
+
+    #[test]
+    fn test_parse_with_validate_improved_error_messages_invalid_syntax() {
+        let content = "invalid syntax here";
+        let result = parse_with_validate(content);
+        assert!(result.is_err());
+        let error_msg = result.err().unwrap();
+
+        println!("Error message: {}", error_msg);
+
+        // Check that error message contains helpful information
+        assert!(error_msg.contains("Failed to parse config file"));
+        assert!(error_msg.contains("line 1"));
+        assert!(error_msg.contains("invalid syntax here"));
+    }
+
+    #[test]
+    fn test_parse_with_validate_improved_error_messages_missing_brace() {
+        let content = "example.com { route / { file index.html ";
+        let result = parse_with_validate(content);
+        assert!(result.is_err());
+        let error_msg = result.err().unwrap();
+
+        // Check that error message suggests missing brace
+        assert!(error_msg.contains("Failed to parse config file"));
+        assert!(error_msg.contains("line 1"));
+    }
+
+    #[test]
+    fn test_parse_with_validate_improved_error_messages_multiline() {
+        let content = r#"
+example.com {
+    route / {
+        invalid_handler
+    }
+}
+        "#;
+        let result = parse_with_validate(content);
+        assert!(result.is_err());
+        let error_msg = result.err().unwrap();
+
+        // Should provide line number information for multiline configs
+        assert!(error_msg.contains("Failed to parse config file"));
+        assert!(error_msg.contains("line"));
+    }
+
+    #[test]
+    fn test_format_parse_error_with_suggestions() {
+        use chico_file::parse_config;
+
+        let test_cases = vec![
+            ("", "Unexpected end of file"),
+            (
+                "example.com",
+                "Domain definitions should be followed by a block",
+            ),
+            (
+                "example.com { route",
+                "Route definitions require a path", // Updated to expect the new improved error message
+            ),
+        ];
+
+        for (input, expected_part) in test_cases {
+            if let Err(formatted) = parse_config(input) {
+                assert!(
+                    formatted.contains(expected_part),
+                    "Expected '{}' to contain '{}' for input '{}'",
+                    formatted,
+                    expected_part,
+                    input
+                );
+            }
+        }
     }
 }
