@@ -258,6 +258,48 @@ fn analyze_eof_context(full_input: &str) -> String {
     "Check the configuration syntax. Ensure proper structure: 'domain { route /path { handler [middleware...] } }'.".to_string()
 }
 
+/// Normalize whitespace in input for better pattern matching with multiline configurations
+fn normalize_whitespace(input: &str) -> String {
+    input.split_whitespace().collect::<Vec<&str>>().join(" ")
+}
+
+/// Extract tokens from the end of input for context analysis
+fn extract_last_tokens(input: &str, count: usize) -> Vec<String> {
+    let normalized = normalize_whitespace(input);
+    let tokens: Vec<&str> = normalized.split_whitespace().collect();
+    tokens
+        .iter()
+        .rev()
+        .take(count)
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect()
+}
+
+/// Check if the input ends with a specific pattern, handling multiline configurations
+fn ends_with_pattern(input: &str, pattern: &[&str]) -> bool {
+    let last_tokens = extract_last_tokens(input, pattern.len());
+    if last_tokens.len() < pattern.len() {
+        return false;
+    }
+
+    for (i, &expected) in pattern.iter().enumerate() {
+        if last_tokens[i] != expected {
+            return false;
+        }
+    }
+    true
+}
+
+/// Check if the input contains a specific pattern anywhere
+fn contains_pattern(input: &str, pattern: &[&str]) -> bool {
+    let normalized = normalize_whitespace(input);
+    let pattern_str = pattern.join(" ");
+    normalized.contains(&pattern_str)
+}
+
 /// Provide suggestions for common configuration errors with full context analysis
 fn suggest_fix_for_content_with_full_context(full_input: &str, error_input: &str) -> String {
     // Calculate error position in the full input
@@ -280,94 +322,180 @@ fn suggest_fix_for_content_with_full_context(full_input: &str, error_input: &str
     // If the error input is the same as the full input, it means nom couldn't parse anything
     // In this case, we should look at what the full input ends with
     if error_input.trim() == full_trimmed {
-        if full_trimmed.ends_with("{ file") {
+        // Check for incomplete handlers using multiline-aware pattern matching
+        if ends_with_pattern(full_trimmed, &["{", "file"]) {
             return "File handler requires a file path. Example: 'file index.html'.".to_string();
         }
 
-        if full_trimmed.ends_with("{ proxy") {
+        if ends_with_pattern(full_trimmed, &["{", "proxy"]) {
             return "Proxy handler requires a URL or configuration block. Example: 'proxy http://localhost:3000' or 'proxy { upstreams ... }'.".to_string();
         }
 
-        if full_trimmed.ends_with("{ respond") {
+        if ends_with_pattern(full_trimmed, &["{", "respond"]) {
             return "Respond handler requires status code and/or body. Example: 'respond 200' or 'respond \"Hello\" 200'.".to_string();
         }
 
-        if full_trimmed.ends_with("{ redirect") {
+        if ends_with_pattern(full_trimmed, &["{", "redirect"]) {
             return "Redirect handler requires a target path. Example: 'redirect /new-path' or 'redirect /new-path 301'.".to_string();
         }
 
-        if full_trimmed.ends_with("{ dir") {
+        if ends_with_pattern(full_trimmed, &["{", "dir"]) {
             return "Directory handler requires a directory path. Example: 'dir /static'."
                 .to_string();
         }
 
-        if full_trimmed.ends_with("{ browse") {
+        if ends_with_pattern(full_trimmed, &["{", "browse"]) {
             return "Browse handler requires a directory path. Example: 'browse /files'."
                 .to_string();
         }
 
-        // Check for incomplete middleware at the end
-        if full_trimmed.ends_with("rate_limit") && !full_trimmed.ends_with("rate_limit ") {
-            return "Rate limit middleware requires a number. Example: 'rate_limit 10'."
-                .to_string();
+        // Check for incomplete middleware at the end - also handle multiline
+        let last_tokens = extract_last_tokens(full_trimmed, 3);
+        let empty_string = String::new();
+        let last_token = last_tokens.last().unwrap_or(&empty_string).as_str();
+
+        match last_token {
+            "rate_limit" => {
+                return "Rate limit middleware requires a number. Example: 'rate_limit 10'."
+                    .to_string();
+            }
+            "cache" => {
+                return "Cache middleware requires a duration. Example: 'cache 5m'.".to_string();
+            }
+            "header" => {
+                return "Header middleware requires operator and name. Example: 'header +Content-Type text/html'.".to_string();
+            }
+            "auth" => {
+                return "Auth middleware requires username and password. Example: 'auth admin password123'.".to_string();
+            }
+            _ => {}
         }
 
-        if full_trimmed.ends_with("cache") && !full_trimmed.ends_with("cache ") {
-            return "Cache middleware requires a duration. Example: 'cache 5m'.".to_string();
+        // Check for incomplete proxy configuration
+        if contains_pattern(full_trimmed, &["proxy", "{"])
+            && !contains_pattern(full_trimmed, &["upstreams"])
+        {
+            return "Proxy blocks must contain 'upstreams' directive. Example: 'proxy { upstreams http://localhost:3000 }'.".to_string();
         }
 
-        if full_trimmed.ends_with("header") && !full_trimmed.ends_with("header ") {
-            return "Header middleware requires operator and name. Example: 'header +Content-Type text/html'.".to_string();
+        if ends_with_pattern(full_trimmed, &["upstreams"]) {
+            return "Proxy upstreams require at least one URL. Example: 'upstreams http://localhost:3000'.".to_string();
         }
 
-        if full_trimmed.ends_with("auth") && !full_trimmed.ends_with("auth ") {
-            return "Auth middleware requires username and password. Example: 'auth admin password123'.".to_string();
+        // Check for incomplete routes
+        if ends_with_pattern(full_trimmed, &["route"]) {
+            return "Route definitions require a path and configuration block. Example: 'route /api { ... }'.".to_string();
+        }
+
+        // Check for incomplete virtual host
+        let tokens = extract_last_tokens(full_trimmed, 3);
+        if !tokens.is_empty()
+            && !contains_pattern(full_trimmed, &["{"])
+            && tokens[0].chars().any(|c| c.is_alphabetic())
+        {
+            return "Domain definitions should be followed by a block enclosed in braces { }. Example: 'example.com { ... }'.".to_string();
+        }
+    }
+
+    // ENHANCED DETECTION: Also check full input for incomplete handlers/middleware regardless of error_input
+    // This handles cases where nom parses most of the input but fails at specific elements
+
+    // Check for incomplete handlers anywhere in the full input
+    if contains_pattern(full_trimmed, &["{"]) {
+        // Check if we have an incomplete proxy handler
+        if ends_with_pattern(full_trimmed, &["proxy"]) || contains_pattern(full_trimmed, &["proxy"])
+        {
+            let normalized_input = normalize_whitespace(full_trimmed);
+            if normalized_input.contains("proxy")
+                && !normalized_input.contains("proxy http")
+                && !normalized_input.contains("upstreams")
+            {
+                return "Proxy handler requires a URL or configuration block. Example: 'proxy http://localhost:3000' or 'proxy { upstreams ... }'.".to_string();
+            }
+        }
+
+        // Check for incomplete middleware
+        let last_few_tokens = extract_last_tokens(full_trimmed, 10);
+        for (i, token) in last_few_tokens.iter().enumerate() {
+            match token.as_str() {
+                "rate_limit" => {
+                    // Check if it's followed by a number
+                    if i + 1 >= last_few_tokens.len()
+                        || !last_few_tokens[i + 1].chars().all(|c| c.is_ascii_digit())
+                    {
+                        return "Rate limit middleware requires a number. Example: 'rate_limit 10'.".to_string();
+                    }
+                }
+                "cache" => {
+                    // Check if it's followed by a duration
+                    if i + 1 >= last_few_tokens.len()
+                        || !last_few_tokens[i + 1].contains('m')
+                            && !last_few_tokens[i + 1].contains('s')
+                    {
+                        return "Cache middleware requires a duration. Example: 'cache 5m'."
+                            .to_string();
+                    }
+                }
+                "header" => {
+                    // Check if it's followed by operator and value
+                    if i + 2 >= last_few_tokens.len() {
+                        return "Header middleware requires operator and name. Example: 'header +Content-Type text/html'.".to_string();
+                    }
+                }
+                "auth" => {
+                    // Check if it's followed by username and password
+                    if i + 2 >= last_few_tokens.len() {
+                        return "Auth middleware requires username and password. Example: 'auth admin password123'.".to_string();
+                    }
+                }
+                _ => {}
+            }
         }
     }
 
     // If the error input starts with a handler name but the full input ends with just that handler,
-    // it means we have an incomplete handler
-    if error_input.starts_with("file") && full_trimmed.ends_with("{ file") {
+    // it means we have an incomplete handler - use multiline-aware matching
+    if error_input.starts_with("file") && ends_with_pattern(full_trimmed, &["{", "file"]) {
         return "File handler requires a file path. Example: 'file index.html'.".to_string();
     }
 
     if error_input.starts_with("proxy")
-        && full_trimmed.ends_with("{ proxy")
-        && !full_trimmed.contains("proxy {")
+        && ends_with_pattern(full_trimmed, &["{", "proxy"])
+        && !contains_pattern(full_trimmed, &["proxy", "{"])
     {
         return "Proxy handler requires a URL or configuration block. Example: 'proxy http://localhost:3000' or 'proxy { upstreams ... }'.".to_string();
     }
 
-    if error_input.starts_with("respond") && full_trimmed.ends_with("{ respond") {
+    if error_input.starts_with("respond") && ends_with_pattern(full_trimmed, &["{", "respond"]) {
         return "Respond handler requires status code and/or body. Example: 'respond 200' or 'respond \"Hello\" 200'.".to_string();
     }
 
-    if error_input.starts_with("redirect") && full_trimmed.ends_with("{ redirect") {
+    if error_input.starts_with("redirect") && ends_with_pattern(full_trimmed, &["{", "redirect"]) {
         return "Redirect handler requires a target path. Example: 'redirect /new-path' or 'redirect /new-path 301'.".to_string();
     }
 
-    if error_input.starts_with("dir") && full_trimmed.ends_with("{ dir") {
+    if error_input.starts_with("dir") && ends_with_pattern(full_trimmed, &["{", "dir"]) {
         return "Directory handler requires a directory path. Example: 'dir /static'.".to_string();
     }
 
-    if error_input.starts_with("browse") && full_trimmed.ends_with("{ browse") {
+    if error_input.starts_with("browse") && ends_with_pattern(full_trimmed, &["{", "browse"]) {
         return "Browse handler requires a directory path. Example: 'browse /files'.".to_string();
     }
 
-    // Check for incomplete middleware at the end
-    if error_input.starts_with("rate_limit") && full_trimmed.ends_with("rate_limit") {
+    // Check for incomplete middleware at the end - also using multiline-aware approach
+    if error_input.starts_with("rate_limit") && ends_with_pattern(full_trimmed, &["rate_limit"]) {
         return "Rate limit middleware requires a number. Example: 'rate_limit 10'.".to_string();
     }
 
-    if error_input.starts_with("cache") && full_trimmed.ends_with("cache") {
+    if error_input.starts_with("cache") && ends_with_pattern(full_trimmed, &["cache"]) {
         return "Cache middleware requires a duration. Example: 'cache 5m'.".to_string();
     }
 
-    if error_input.starts_with("header") && full_trimmed.ends_with("header") {
+    if error_input.starts_with("header") && ends_with_pattern(full_trimmed, &["header"]) {
         return "Header middleware requires operator and name. Example: 'header +Content-Type text/html'.".to_string();
     }
 
-    if error_input.starts_with("auth") && full_trimmed.ends_with("auth") {
+    if error_input.starts_with("auth") && ends_with_pattern(full_trimmed, &["auth"]) {
         return "Auth middleware requires username and password. Example: 'auth admin password123'.".to_string();
     }
 
@@ -3257,10 +3385,12 @@ mod tests {
                 "proxy {",
             );
             println!("Debug proxy block test result: '{}'", result);
-            // This might be a tricky case - let's be flexible about the result
+            // Our enhanced detection should provide proxy-specific guidance
             assert!(
-                result.contains("Proxy blocks must contain 'upstreams'")
-                    || result.contains("Missing closing braces"),
+                result.contains("Proxy")
+                    && (result.contains("Proxy blocks must contain 'upstreams'")
+                        || result.contains("Proxy handler requires")
+                        || result.contains("Missing closing braces")),
                 "Should show proxy-specific or structural error, got: {}",
                 result
             );
@@ -3345,6 +3475,67 @@ mod tests {
                     }
                     Ok(_) => println!("Unexpected success"),
                 }
+            }
+        }
+
+        #[test]
+        fn test_multiline_config_error_handling() {
+            println!("\n=== Testing multiline configuration error handling ===");
+
+            // Test single line (should work well)
+            let single_line = "example.com { route /path { file";
+            println!("Single line config: '{}'", single_line);
+            match crate::parse_config(single_line) {
+                Err(e) => println!("Single line error: {}", e),
+                Ok(_) => println!("Unexpectedly parsed"),
+            }
+
+            // Test multiline (this is the problematic case)
+            let multiline = "example.com {\n  route /path {\n    file";
+            println!("\nMultiline config:\n{}", multiline);
+            match crate::parse_config(multiline) {
+                Err(e) => {
+                    println!("Multiline error: {}", e);
+                    if e.contains("File handler requires a file path") {
+                        println!("✅ Multiline config correctly identified as file handler error");
+                    } else {
+                        println!("❌ Multiline config shows generic error instead of specific file handler error");
+                    }
+                }
+                Ok(_) => println!("Unexpectedly parsed"),
+            }
+
+            // Test another multiline case
+            let multiline_proxy = "example.com {\n  route /api {\n    proxy\n  }\n}";
+            println!("\nMultiline proxy config:\n{}", multiline_proxy);
+            match crate::parse_config(multiline_proxy) {
+                Err(e) => {
+                    println!("Multiline proxy error: {}", e);
+                    if e.contains("Proxy handler requires") {
+                        println!("✅ Multiline proxy correctly identified as proxy handler error");
+                    } else {
+                        println!("❌ Multiline proxy shows generic error instead of specific proxy handler error");
+                    }
+                }
+                Ok(_) => println!("Unexpectedly parsed"),
+            }
+
+            // Test multiline middleware
+            let multiline_middleware =
+                "example.com {\n  route /files {\n    file index.html\n    rate_limit\n  }\n}";
+            println!("\nMultiline middleware config:\n{}", multiline_middleware);
+            match crate::parse_config(multiline_middleware) {
+                Err(e) => {
+                    println!("Multiline middleware error: {}", e);
+                    if e.contains("Rate limit middleware requires") {
+                        println!(
+                            "✅ Multiline middleware correctly identified as rate_limit error"
+                        );
+                    } else {
+                        println!("❌ Multiline middleware shows generic error instead of specific rate_limit error");
+                    }
+                }
+                Ok(_) => println!("Unexpectedly parsed"),
             }
         }
     }

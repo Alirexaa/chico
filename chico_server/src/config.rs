@@ -432,7 +432,7 @@ example.com {
             ),
             (
                 "example.com { route",
-                "Missing closing braces", // Updated to expect the new improved error message
+                "Route definitions require a path", // Updated to expect the new improved error message
             ),
         ];
 
