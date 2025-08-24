@@ -42,6 +42,18 @@ To run the server, use the following command:
 cargo run --bin chico -- run --config <path_to_config_file>
 ```
 
+### Running the Server as a Daemon
+
+To start the server as a background daemon:
+```sh
+cargo run --bin chico -- start --config <path_to_config_file>
+```
+
+To stop the background daemon:
+```sh
+cargo run --bin chico -- stop
+```
+
 ### Validating Configuration
 
 To validate the configuration file, use the following command:
@@ -49,6 +61,13 @@ To validate the configuration file, use the following command:
 ```sh
 cargo run --bin chico -- validate --config <path_to_config_file>
 ```
+
+### Available Commands
+
+- `run` - Run the server (blocks the shell)
+- `start` - Start the server as a background daemon
+- `stop` - Stop the background daemon server
+- `validate` - Validate the configuration file
 
 ### Configuration
 

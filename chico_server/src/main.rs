@@ -3,8 +3,11 @@ use clap::Parser;
 use config::validate_config_file;
 use server::run_server;
 use std::process::ExitCode;
+#[cfg(unix)]
+use daemonize::Daemonize;
 mod cli;
 mod config;
+mod daemon;
 mod handlers;
 mod load_balance;
 mod plan;
@@ -18,7 +21,27 @@ async fn main() -> ExitCode {
 
     let cli = cli::Cli::parse();
     match cli.command {
-        cli::Commands::Run { config } => {
+        cli::Commands::Run { config, daemon_mode } => {
+            // If daemon_mode is true and we're on Unix, daemonize first
+            #[cfg(unix)]
+            if daemon_mode {
+                let daemon = Daemonize::new()
+                    .pid_file(daemon::get_pid_file_path())
+                    .chown_pid_file(true)
+                    .working_directory("/tmp");
+                
+                match daemon.start() {
+                    Ok(_) => {
+                        // We are now in the daemon process
+                        // Continue with normal server startup
+                    },
+                    Err(e) => {
+                        eprintln!("Failed to daemonize: {}", e);
+                        return ExitCode::FAILURE;
+                    }
+                }
+            }
+            
             let result = validate_config_file(config.as_str()).await;
 
             let Ok(conf) = result else {
@@ -63,6 +86,37 @@ async fn main() -> ExitCode {
             server.await;
 
             return ExitCode::SUCCESS;
+        }
+        cli::Commands::Start { config } => {
+            let result = validate_config_file(config.as_str()).await;
+
+            if let Err(e) = result {
+                eprintln!("Configuration validation failed: {}", e);
+                return ExitCode::FAILURE;
+            };
+
+            match daemon::start_daemon(&config) {
+                Ok(_) => {
+                    println!("✅ Server started as daemon");
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("Failed to start daemon: {}", e);
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        cli::Commands::Stop => {
+            match daemon::stop_daemon() {
+                Ok(_) => {
+                    println!("✅ Daemon stopped");
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("Failed to stop daemon: {}", e);
+                    ExitCode::FAILURE
+                }
+            }
         }
         cli::Commands::Validate { config } => {
             let result = validate_config_file(config.as_str()).await;
