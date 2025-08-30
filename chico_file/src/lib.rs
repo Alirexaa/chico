@@ -18,6 +18,10 @@ use crate::types::Upstream;
 
 pub mod types;
 
+// Type aliases for complex return types to satisfy clippy
+type ProxyBlockContentsResult<'a> = IResult<&'a str, (Vec<Upstream>, Option<String>, Option<u64>, Option<u64>)>;
+type ProxyOptionalFieldsResult<'a> = IResult<&'a str, (Option<String>, Option<u64>, Option<u64>)>;
+
 /// Convert nom parsing errors into user-friendly error messages
 fn format_parse_error(input: &str, error: nom::Err<Error<&str>>) -> String {
     match error {
@@ -1047,7 +1051,7 @@ fn parse_proxy_block(input: &str) -> IResult<&str, types::Handler> {
 }
 
 // Parses the contents inside the proxy block
-fn parse_proxy_block_contents(input: &str) -> IResult<&str, (Vec<Upstream>, Option<String>, Option<u64>, Option<u64>)> {
+fn parse_proxy_block_contents(input: &str) -> ProxyBlockContentsResult<'_> {
     let (input, _) = multispace0(input)?;
 
     // Allow comments before upstreams
@@ -1069,7 +1073,7 @@ fn parse_proxy_block_contents(input: &str) -> IResult<&str, (Vec<Upstream>, Opti
 }
 
 // Parse optional fields like lb_policy, request_timeout, connection_timeout in any order
-fn parse_proxy_optional_fields(input: &str) -> IResult<&str, (Option<String>, Option<u64>, Option<u64>)> {
+fn parse_proxy_optional_fields(input: &str) -> ProxyOptionalFieldsResult<'_> {
     let mut remaining = input;
     let mut lb_policy = None;
     let mut request_timeout = None;
