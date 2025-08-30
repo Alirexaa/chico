@@ -1363,23 +1363,6 @@ fn parse_string_u16(input: &str) -> IResult<&str, (&str, u16)> {
 
 #[cfg(test)]
 mod tests {
-    // Helper functions for creating proxy handlers in tests
-    fn proxy_single(upstream_url: &str) -> crate::types::Handler {
-        crate::types::Handler::Proxy(crate::types::ProxyConfig::new(
-            crate::types::LoadBalancer::NoBalancer(
-                crate::types::Upstream::new(upstream_url.to_string()).unwrap()
-            )
-        ))
-    }
-    
-    fn proxy_round_robin(upstream_urls: Vec<&str>) -> crate::types::Handler {
-        let upstreams = upstream_urls.into_iter()
-            .map(|url| crate::types::Upstream::new(url.to_string()).unwrap())
-            .collect();
-        crate::types::Handler::Proxy(crate::types::ProxyConfig::new(
-            crate::types::LoadBalancer::RoundRobin(upstreams)
-        ))
-    }
 
     mod comments {
         use crate::parse_comment;
@@ -1694,7 +1677,9 @@ mod tests {
                 parse_handler("proxy http://localhost:3000"),
                 Ok((
                     "",
-                    proxy_single("http://localhost:3000")
+                    types::Handler::Proxy(types::LoadBalancer::NoBalancer(
+                        Upstream::new("http://localhost:3000".to_string()).unwrap()
+                    ))
                 ))
             );
         }
@@ -1706,7 +1691,9 @@ mod tests {
                 parse_handler(input),
                 Ok((
                     "",
-                    proxy_single("http://localhost:3000")
+                    types::Handler::Proxy(types::LoadBalancer::NoBalancer(
+                        Upstream::new("http://localhost:3000".to_string()).unwrap()
+                    ))
                 ))
             );
         }
@@ -1813,69 +1800,6 @@ mod tests {
                     ))
                 ))
             );
-        }
-
-        #[test]
-        fn test_parse_handler_proxy_block_with_timeouts() {
-            let input = "proxy { upstreams http://localhost:3000 request_timeout 20 connection_timeout 5 }";
-            let result = parse_handler(input);
-            assert!(result.is_ok());
-            
-            let (remaining, handler) = result.unwrap();
-            assert_eq!(remaining, "");
-            
-            if let types::Handler::Proxy(proxy_config) = handler {
-                assert_eq!(proxy_config.request_timeout, Some(20));
-                assert_eq!(proxy_config.connection_timeout, Some(5));
-                match proxy_config.load_balancer {
-                    types::LoadBalancer::NoBalancer(upstream) => {
-                        assert_eq!(upstream.get_host_port(), "localhost:3000");
-                    }
-                    _ => panic!("Expected NoBalancer"),
-                }
-            } else {
-                panic!("Expected Proxy handler");
-            }
-        }
-
-        #[test]
-        fn test_parse_handler_proxy_block_with_only_request_timeout() {
-            let input = "proxy { upstreams http://localhost:3000 request_timeout 15 }";
-            let result = parse_handler(input);
-            assert!(result.is_ok());
-            
-            let (remaining, handler) = result.unwrap();
-            assert_eq!(remaining, "");
-            
-            if let types::Handler::Proxy(proxy_config) = handler {
-                assert_eq!(proxy_config.request_timeout, Some(15));
-                assert_eq!(proxy_config.connection_timeout, None);
-            } else {
-                panic!("Expected Proxy handler");
-            }
-        }
-
-        #[test]
-        fn test_parse_handler_proxy_block_round_robin_with_timeouts() {
-            let input = "proxy { upstreams http://host1:8080 http://host2:8080 lb_policy round_robin request_timeout 25 connection_timeout 8 }";
-            let result = parse_handler(input);
-            assert!(result.is_ok());
-            
-            let (remaining, handler) = result.unwrap();
-            assert_eq!(remaining, "");
-            
-            if let types::Handler::Proxy(proxy_config) = handler {
-                assert_eq!(proxy_config.request_timeout, Some(25));
-                assert_eq!(proxy_config.connection_timeout, Some(8));
-                match proxy_config.load_balancer {
-                    types::LoadBalancer::RoundRobin(upstreams) => {
-                        assert_eq!(upstreams.len(), 2);
-                    }
-                    _ => panic!("Expected RoundRobin"),
-                }
-            } else {
-                panic!("Expected Proxy handler");
-            }
         }
 
         #[test]
@@ -3663,72 +3587,6 @@ mod tests {
                 }
                 Ok(_) => println!("Unexpectedly parsed"),
             }
-        }
-    }
-}
-
-// Integration test for timeout parsing
-#[cfg(test)]
-mod timeout_integration_test {
-    use crate::types::*;
-    use crate::parse_config;
-
-    #[test] 
-    fn test_timeout_parsing_integration() {
-        let config_content = r#"
-localhost {
-    route /test/* {
-        proxy {
-            upstreams http://localhost:8080
-            request_timeout 25
-            connection_timeout 10
-        }
-    }
-}
-"#;
-
-        let result = parse_config(config_content);
-        assert!(result.is_ok());
-        
-        let (_, config) = result.unwrap();
-        let vhost = &config.virtual_hosts[0];
-        let route = &vhost.routes[0];
-        
-        match &route.handler {
-            Handler::Proxy(proxy_config) => {
-                assert_eq!(proxy_config.request_timeout, Some(25));
-                assert_eq!(proxy_config.connection_timeout, Some(10));
-            }
-            _ => panic!("Expected proxy handler"),
-        }
-    }
-    
-    #[test]
-    fn test_timeout_parsing_partial() {
-        let config_content = r#"
-localhost {
-    route /test/* {
-        proxy {
-            upstreams http://localhost:8080
-            request_timeout 15
-        }
-    }
-}
-"#;
-
-        let result = parse_config(config_content);
-        assert!(result.is_ok());
-        
-        let (_, config) = result.unwrap();
-        let vhost = &config.virtual_hosts[0];
-        let route = &vhost.routes[0];
-        
-        match &route.handler {
-            Handler::Proxy(proxy_config) => {
-                assert_eq!(proxy_config.request_timeout, Some(15));
-                assert_eq!(proxy_config.connection_timeout, None);
-            }
-            _ => panic!("Expected proxy handler"),
         }
     }
 }
