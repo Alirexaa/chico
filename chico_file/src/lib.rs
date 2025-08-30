@@ -997,7 +997,9 @@ fn parse_proxy_simple(input: &str) -> IResult<&str, types::Handler> {
     match Upstream::new(addr.to_string()) {
         Ok(upstream) => Ok((
             input,
-            types::Handler::Proxy(types::LoadBalancer::NoBalancer(upstream)),
+            types::Handler::Proxy(types::ProxyConfig::new(
+                types::LoadBalancer::NoBalancer(upstream)
+            )),
         )),
         Err(_) => Err(nom::Err::Error(nom::error::Error::new(
             input,
@@ -1008,7 +1010,7 @@ fn parse_proxy_simple(input: &str) -> IResult<&str, types::Handler> {
 
 // Parses the new proxy block format
 fn parse_proxy_block(input: &str) -> IResult<&str, types::Handler> {
-    let (input, (upstreams, lb_policy)) =
+    let (input, (upstreams, lb_policy, request_timeout, connection_timeout)) =
         delimited(char('{'), parse_proxy_block_contents, char('}'))(input)?;
 
     let load_balancer = match lb_policy.as_deref() {
@@ -1037,11 +1039,15 @@ fn parse_proxy_block(input: &str) -> IResult<&str, types::Handler> {
         }
     };
 
-    Ok((input, types::Handler::Proxy(load_balancer)))
+    Ok((input, types::Handler::Proxy(types::ProxyConfig::with_timeouts(
+        load_balancer, 
+        request_timeout, 
+        connection_timeout
+    ))))
 }
 
 // Parses the contents inside the proxy block
-fn parse_proxy_block_contents(input: &str) -> IResult<&str, (Vec<Upstream>, Option<String>)> {
+fn parse_proxy_block_contents(input: &str) -> IResult<&str, (Vec<Upstream>, Option<String>, Option<u64>, Option<u64>)> {
     let (input, _) = multispace0(input)?;
 
     // Allow comments before upstreams
@@ -1052,32 +1058,72 @@ fn parse_proxy_block_contents(input: &str) -> IResult<&str, (Vec<Upstream>, Opti
     let (input, _) = tag("upstreams")(input)?;
     let (input, _) = multispace1(input)?;
 
-    // Parse upstream addresses until we hit a newline or lb_policy keyword
+    // Parse upstream addresses until we hit a newline or keyword
     let (input, upstreams) = parse_upstream_addresses(input)?;
     let (input, _) = multispace0(input)?;
 
-    // Allow comments before lb_policy
-    let (input, _) = many0(parse_comment)(input)?;
-    let (input, _) = multispace0(input)?;
+    // Parse optional fields in any order (lb_policy, request_timeout, connection_timeout)
+    let (input, (lb_policy, request_timeout, connection_timeout)) = parse_proxy_optional_fields(input)?;
 
-    // Check for lb_policy
-    let (input, lb_policy) = opt(tuple((
-        tag("lb_policy"),
-        opt(preceded(
-            multispace1,
-            take_while1(|c: char| !c.is_whitespace() && c != '}'),
-        )),
-    )))(input)?;
+    Ok((input, (upstreams, lb_policy, request_timeout, connection_timeout)))
+}
 
-    let (input, _) = multispace0(input)?;
+// Parse optional fields like lb_policy, request_timeout, connection_timeout in any order
+fn parse_proxy_optional_fields(input: &str) -> IResult<&str, (Option<String>, Option<u64>, Option<u64>)> {
+    let mut remaining = input;
+    let mut lb_policy = None;
+    let mut request_timeout = None;
+    let mut connection_timeout = None;
 
-    // Allow comments after lb_policy
-    let (input, _) = many0(parse_comment)(input)?;
-    let (input, _) = multispace0(input)?;
+    loop {
+        // Skip whitespace and comments
+        let (next_input, _) = multispace0(remaining)?;
+        let (next_input, _) = many0(parse_comment)(next_input)?;
+        let (next_input, _) = multispace0(next_input)?;
+        remaining = next_input;
 
-    let policy_str = lb_policy.and_then(|(_, policy_opt)| policy_opt.map(|s| s.to_string()));
+        // Check if we've hit the end of the block
+        if remaining.is_empty() || remaining.starts_with("}") {
+            break;
+        }
 
-    Ok((input, (upstreams, policy_str)))
+        // Try to parse lb_policy
+        if remaining.starts_with("lb_policy") && lb_policy.is_none() {
+            let (next_input, _) = tag("lb_policy")(remaining)?;
+            let (next_input, policy_opt) = opt(preceded(
+                multispace1,
+                take_while1(|c: char| !c.is_whitespace() && c != '}' && c != '\n'),
+            ))(next_input)?;
+            lb_policy = policy_opt.map(|s| s.to_string());
+            remaining = next_input;
+            continue;
+        }
+
+        // Try to parse request_timeout
+        if remaining.starts_with("request_timeout") && request_timeout.is_none() {
+            let (next_input, _) = tag("request_timeout")(remaining)?;
+            let (next_input, _) = multispace1(next_input)?;
+            let (next_input, timeout_str) = digit1(next_input)?;
+            request_timeout = timeout_str.parse::<u64>().ok();
+            remaining = next_input;
+            continue;
+        }
+
+        // Try to parse connection_timeout
+        if remaining.starts_with("connection_timeout") && connection_timeout.is_none() {
+            let (next_input, _) = tag("connection_timeout")(remaining)?;
+            let (next_input, _) = multispace1(next_input)?;
+            let (next_input, timeout_str) = digit1(next_input)?;
+            connection_timeout = timeout_str.parse::<u64>().ok();
+            remaining = next_input;
+            continue;
+        }
+
+        // If we get here, we couldn't parse any known field, so break
+        break;
+    }
+
+    Ok((remaining, (lb_policy, request_timeout, connection_timeout)))
 }
 
 // Parse upstream addresses one by one until we hit lb_policy or end
@@ -1092,8 +1138,12 @@ fn parse_upstream_addresses(input: &str) -> IResult<&str, Vec<Upstream>> {
         let (next_input, _) = multispace0(next_input)?;
         remaining = next_input;
 
-        // Check if we've hit lb_policy or } or end
-        if remaining.starts_with("lb_policy") || remaining.starts_with("}") || remaining.is_empty()
+        // Check if we've hit keywords or } or end
+        if remaining.starts_with("lb_policy") 
+            || remaining.starts_with("request_timeout")
+            || remaining.starts_with("connection_timeout")
+            || remaining.starts_with("}") 
+            || remaining.is_empty()
         {
             break;
         }
@@ -1101,8 +1151,8 @@ fn parse_upstream_addresses(input: &str) -> IResult<&str, Vec<Upstream>> {
         // Parse the next upstream address
         let (next_input, addr) = take_while1(|c: char| !c.is_whitespace())(remaining)?;
 
-        // Make sure it's not lb_policy
-        if addr == "lb_policy" {
+        // Make sure it's not a keyword
+        if addr == "lb_policy" || addr == "request_timeout" || addr == "connection_timeout" {
             break;
         }
 

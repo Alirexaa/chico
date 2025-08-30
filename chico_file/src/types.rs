@@ -21,7 +21,7 @@ pub struct Route {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Handler {
     File(String),
-    Proxy(LoadBalancer),
+    Proxy(ProxyConfig),
     Dir(String),
     Browse(String),
     Respond {
@@ -32,6 +32,31 @@ pub enum Handler {
         path: Option<String>,
         status_code: Option<u16>,
     },
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ProxyConfig {
+    pub load_balancer: LoadBalancer,
+    pub request_timeout: Option<u64>,    // in seconds
+    pub connection_timeout: Option<u64>, // in seconds
+}
+
+impl ProxyConfig {
+    pub fn new(load_balancer: LoadBalancer) -> Self {
+        Self {
+            load_balancer,
+            request_timeout: None,
+            connection_timeout: None,
+        }
+    }
+    
+    pub fn with_timeouts(load_balancer: LoadBalancer, request_timeout: Option<u64>, connection_timeout: Option<u64>) -> Self {
+        Self {
+            load_balancer,
+            request_timeout,
+            connection_timeout,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -142,8 +167,10 @@ mod tests {
         let handler = Handler::File(String::new());
         assert_eq!(handler.type_name(), "File");
 
-        let handler = Handler::Proxy(crate::types::LoadBalancer::NoBalancer(
-            Upstream::new("http://127.0.0.1".to_string()).unwrap(),
+        let handler = Handler::Proxy(crate::types::ProxyConfig::new(
+            crate::types::LoadBalancer::NoBalancer(
+                Upstream::new("http://127.0.0.1".to_string()).unwrap(),
+            )
         ));
         assert_eq!(handler.type_name(), "Proxy");
 

@@ -76,12 +76,16 @@ impl ServerPlan {
                     chico_file::types::Handler::File(path) => {
                         RoutePlan::File(FileHandler::new(path.clone(), r.path.clone()))
                     }
-                    chico_file::types::Handler::Proxy(load_balancer) => match load_balancer {
+                    chico_file::types::Handler::Proxy(proxy_config) => match &proxy_config.load_balancer {
                         chico_file::types::LoadBalancer::NoBalancer(upstream) => {
                             let balancer = SingleUpstream::new(Node::new(
                                 upstream.get_host_port().parse().unwrap(),
                             ));
-                            RoutePlan::ReverseProxy(ReverseProxyHandler::new(Box::new(balancer)))
+                            RoutePlan::ReverseProxy(ReverseProxyHandler::with_timeouts(
+                                Box::new(balancer), 
+                                proxy_config.request_timeout, 
+                                proxy_config.connection_timeout
+                            ))
                         }
                         chico_file::types::LoadBalancer::RoundRobin(upstreams) => {
                             let balancer = RoundRobinBalancer::new(
@@ -90,7 +94,11 @@ impl ServerPlan {
                                     .map(|u| Node::new(u.get_host_port().parse().unwrap()))
                                     .collect(),
                             );
-                            RoutePlan::ReverseProxy(ReverseProxyHandler::new(Box::new(balancer)))
+                            RoutePlan::ReverseProxy(ReverseProxyHandler::with_timeouts(
+                                Box::new(balancer), 
+                                proxy_config.request_timeout, 
+                                proxy_config.connection_timeout
+                            ))
                         }
                     },
                     chico_file::types::Handler::Dir(_) => todo!(),
