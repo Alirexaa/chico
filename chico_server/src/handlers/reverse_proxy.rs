@@ -21,13 +21,13 @@ pub struct ReverseProxyHandler {
 #[allow(dead_code)]
 impl ReverseProxyHandler {
     pub fn new(load_balancer: Box<dyn crate::load_balance::LoadBalance>) -> Self {
-        Self { 
+        Self {
             load_balancer,
-            request_timeout: Duration::from_secs(30),     // default 30 seconds
-            connection_timeout: Duration::from_secs(10),  // default 10 seconds
+            request_timeout: Duration::from_secs(30), // default 30 seconds
+            connection_timeout: Duration::from_secs(10), // default 10 seconds
         }
     }
-    
+
     pub fn with_timeouts(
         load_balancer: Box<dyn crate::load_balance::LoadBalance>,
         request_timeout: Option<u64>,
@@ -39,7 +39,7 @@ impl ReverseProxyHandler {
             connection_timeout: Duration::from_secs(connection_timeout.unwrap_or(10)),
         }
     }
-    
+
     fn get_node(&self) -> Option<Arc<Node>> {
         self.load_balancer.get_node()
     }
@@ -57,12 +57,10 @@ impl RequestHandler for ReverseProxyHandler {
         debug!("start connect to upstream");
         let upstream = self.get_node().unwrap();
         let host_and_port = upstream.addr;
-        
+
         // Apply connection timeout
-        let connect_result = tokio::time::timeout(
-            self.connection_timeout, 
-            TcpStream::connect(host_and_port)
-        ).await;
+        let connect_result =
+            tokio::time::timeout(self.connection_timeout, TcpStream::connect(host_and_port)).await;
 
         let client_stream = match connect_result {
             Ok(Ok(stream)) => stream,
@@ -75,7 +73,10 @@ impl RequestHandler for ReverseProxyHandler {
                 .await;
             }
             Err(_) => {
-                error!("Connection timeout while connecting to upstream server: {}", host_and_port);
+                error!(
+                    "Connection timeout while connecting to upstream server: {}",
+                    host_and_port
+                );
                 return RespondHandler::bad_gateway_with_body(
                     "502 Bad Gateway - connection timeout to upstream server.".to_string(),
                 )
@@ -130,7 +131,8 @@ impl RequestHandler for ReverseProxyHandler {
 
         debug!("start sending request");
 
-        let timeout_result = tokio::time::timeout(self.request_timeout, sender.send_request(request)).await;
+        let timeout_result =
+            tokio::time::timeout(self.request_timeout, sender.send_request(request)).await;
 
         let response = match timeout_result {
             Ok(Ok(response)) => response,

@@ -49,8 +49,12 @@ impl ProxyConfig {
             connection_timeout: None,
         }
     }
-    
-    pub fn with_timeouts(load_balancer: LoadBalancer, request_timeout: Option<u64>, connection_timeout: Option<u64>) -> Self {
+
+    pub fn with_timeouts(
+        load_balancer: LoadBalancer,
+        request_timeout: Option<u64>,
+        connection_timeout: Option<u64>,
+    ) -> Self {
         Self {
             load_balancer,
             request_timeout,
@@ -170,7 +174,7 @@ mod tests {
         let handler = Handler::Proxy(crate::types::ProxyConfig::new(
             crate::types::LoadBalancer::NoBalancer(
                 Upstream::new("http://127.0.0.1".to_string()).unwrap(),
-            )
+            ),
         ));
         assert_eq!(handler.type_name(), "Proxy");
 

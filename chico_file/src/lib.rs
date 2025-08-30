@@ -19,7 +19,8 @@ use crate::types::Upstream;
 pub mod types;
 
 // Type aliases for complex return types to satisfy clippy
-type ProxyBlockContentsResult<'a> = IResult<&'a str, (Vec<Upstream>, Option<String>, Option<u64>, Option<u64>)>;
+type ProxyBlockContentsResult<'a> =
+    IResult<&'a str, (Vec<Upstream>, Option<String>, Option<u64>, Option<u64>)>;
 type ProxyOptionalFieldsResult<'a> = IResult<&'a str, (Option<String>, Option<u64>, Option<u64>)>;
 
 /// Convert nom parsing errors into user-friendly error messages
@@ -1001,9 +1002,9 @@ fn parse_proxy_simple(input: &str) -> IResult<&str, types::Handler> {
     match Upstream::new(addr.to_string()) {
         Ok(upstream) => Ok((
             input,
-            types::Handler::Proxy(types::ProxyConfig::new(
-                types::LoadBalancer::NoBalancer(upstream)
-            )),
+            types::Handler::Proxy(types::ProxyConfig::new(types::LoadBalancer::NoBalancer(
+                upstream,
+            ))),
         )),
         Err(_) => Err(nom::Err::Error(nom::error::Error::new(
             input,
@@ -1043,11 +1044,14 @@ fn parse_proxy_block(input: &str) -> IResult<&str, types::Handler> {
         }
     };
 
-    Ok((input, types::Handler::Proxy(types::ProxyConfig::with_timeouts(
-        load_balancer, 
-        request_timeout, 
-        connection_timeout
-    ))))
+    Ok((
+        input,
+        types::Handler::Proxy(types::ProxyConfig::with_timeouts(
+            load_balancer,
+            request_timeout,
+            connection_timeout,
+        )),
+    ))
 }
 
 // Parses the contents inside the proxy block
@@ -1067,9 +1071,13 @@ fn parse_proxy_block_contents(input: &str) -> ProxyBlockContentsResult<'_> {
     let (input, _) = multispace0(input)?;
 
     // Parse optional fields in any order (lb_policy, request_timeout, connection_timeout)
-    let (input, (lb_policy, request_timeout, connection_timeout)) = parse_proxy_optional_fields(input)?;
+    let (input, (lb_policy, request_timeout, connection_timeout)) =
+        parse_proxy_optional_fields(input)?;
 
-    Ok((input, (upstreams, lb_policy, request_timeout, connection_timeout)))
+    Ok((
+        input,
+        (upstreams, lb_policy, request_timeout, connection_timeout),
+    ))
 }
 
 // Parse optional fields like lb_policy, request_timeout, connection_timeout in any order
@@ -1143,10 +1151,10 @@ fn parse_upstream_addresses(input: &str) -> IResult<&str, Vec<Upstream>> {
         remaining = next_input;
 
         // Check if we've hit keywords or } or end
-        if remaining.starts_with("lb_policy") 
+        if remaining.starts_with("lb_policy")
             || remaining.starts_with("request_timeout")
             || remaining.starts_with("connection_timeout")
-            || remaining.starts_with("}") 
+            || remaining.starts_with("}")
             || remaining.is_empty()
         {
             break;
@@ -1371,17 +1379,19 @@ mod tests {
     fn proxy_single(upstream_url: &str) -> crate::types::Handler {
         crate::types::Handler::Proxy(crate::types::ProxyConfig::new(
             crate::types::LoadBalancer::NoBalancer(
-                crate::types::Upstream::new(upstream_url.to_string()).unwrap()
-            )
+                crate::types::Upstream::new(upstream_url.to_string()).unwrap(),
+            ),
         ))
     }
-    
+
+    #[allow(dead_code)]
     fn proxy_round_robin(upstream_urls: Vec<&str>) -> crate::types::Handler {
-        let upstreams = upstream_urls.into_iter()
+        let upstreams = upstream_urls
+            .into_iter()
             .map(|url| crate::types::Upstream::new(url.to_string()).unwrap())
             .collect();
         crate::types::Handler::Proxy(crate::types::ProxyConfig::new(
-            crate::types::LoadBalancer::RoundRobin(upstreams)
+            crate::types::LoadBalancer::RoundRobin(upstreams),
         ))
     }
 
@@ -1679,6 +1689,7 @@ mod tests {
     }
 
     mod handlers {
+        use crate::tests::proxy_single;
         use crate::{
             parse_handler, parse_redirect_handler_args, parse_respond_handler_args,
             types::{self, Upstream},
@@ -1696,10 +1707,7 @@ mod tests {
         fn test_parse_handler_proxy() {
             assert_eq!(
                 parse_handler("proxy http://localhost:3000"),
-                Ok((
-                    "",
-                    proxy_single("http://localhost:3000")
-                ))
+                Ok(("", proxy_single("http://localhost:3000")))
             );
         }
 
@@ -1708,10 +1716,7 @@ mod tests {
             let input = "proxy { upstreams http://localhost:3000 }";
             assert_eq!(
                 parse_handler(input),
-                Ok((
-                    "",
-                    proxy_single("http://localhost:3000")
-                ))
+                Ok(("", proxy_single("http://localhost:3000")))
             );
         }
 
@@ -1722,10 +1727,12 @@ mod tests {
                 parse_handler(input),
                 Ok((
                     "",
-                    types::Handler::Proxy(types::LoadBalancer::RoundRobin(vec![
-                        Upstream::new("http://host1:8080".to_string()).unwrap(),
-                        Upstream::new("http://host2:8080".to_string()).unwrap(),
-                    ]))
+                    types::Handler::Proxy(types::ProxyConfig::new(
+                        types::LoadBalancer::RoundRobin(vec![
+                            Upstream::new("http://host1:8080".to_string()).unwrap(),
+                            Upstream::new("http://host2:8080".to_string()).unwrap(),
+                        ])
+                    ))
                 ))
             );
         }
@@ -1737,11 +1744,13 @@ mod tests {
                 parse_handler(input),
                 Ok((
                     "",
-                    types::Handler::Proxy(types::LoadBalancer::RoundRobin(vec![
-                        Upstream::new("http://host1:8080".to_string()).unwrap(),
-                        Upstream::new("http://host2:8080".to_string()).unwrap(),
-                        Upstream::new("http://host3:8080".to_string()).unwrap(),
-                    ]))
+                    types::Handler::Proxy(types::ProxyConfig::new(
+                        types::LoadBalancer::RoundRobin(vec![
+                            Upstream::new("http://host1:8080".to_string()).unwrap(),
+                            Upstream::new("http://host2:8080".to_string()).unwrap(),
+                            Upstream::new("http://host3:8080".to_string()).unwrap(),
+                        ])
+                    ))
                 ))
             );
         }
@@ -1753,8 +1762,10 @@ mod tests {
                 parse_handler(input),
                 Ok((
                     "",
-                    types::Handler::Proxy(types::LoadBalancer::NoBalancer(
-                        Upstream::new("http://localhost:3000".to_string()).unwrap()
+                    types::Handler::Proxy(types::ProxyConfig::new(
+                        types::LoadBalancer::NoBalancer(
+                            Upstream::new("http://localhost:3000".to_string()).unwrap()
+                        )
                     ))
                 ))
             );
@@ -1767,10 +1778,12 @@ mod tests {
                 parse_handler(input),
                 Ok((
                     "",
-                    types::Handler::Proxy(types::LoadBalancer::RoundRobin(vec![
-                        Upstream::new("http://host1:8080".to_string()).unwrap(),
-                        Upstream::new("http://host2:8080".to_string()).unwrap(),
-                    ]))
+                    types::Handler::Proxy(types::ProxyConfig::new(
+                        types::LoadBalancer::RoundRobin(vec![
+                            Upstream::new("http://host1:8080".to_string()).unwrap(),
+                            Upstream::new("http://host2:8080".to_string()).unwrap(),
+                        ])
+                    ))
                 ))
             );
         }
@@ -1782,10 +1795,12 @@ mod tests {
                 parse_handler(input),
                 Ok((
                     "",
-                    types::Handler::Proxy(types::LoadBalancer::RoundRobin(vec![
-                        Upstream::new("http://host1:8080".to_string()).unwrap(),
-                        Upstream::new("http://host2:8080".to_string()).unwrap(),
-                    ]))
+                    types::Handler::Proxy(types::ProxyConfig::new(
+                        types::LoadBalancer::RoundRobin(vec![
+                            Upstream::new("http://host1:8080".to_string()).unwrap(),
+                            Upstream::new("http://host2:8080".to_string()).unwrap(),
+                        ])
+                    ))
                 ))
             );
         }
@@ -1797,10 +1812,12 @@ mod tests {
                 parse_handler(input),
                 Ok((
                     "",
-                    types::Handler::Proxy(types::LoadBalancer::RoundRobin(vec![
-                        Upstream::new("http://host1:8080".to_string()).unwrap(),
-                        Upstream::new("http://host2:8080".to_string()).unwrap(),
-                    ]))
+                    types::Handler::Proxy(types::ProxyConfig::new(
+                        types::LoadBalancer::RoundRobin(vec![
+                            Upstream::new("http://host1:8080".to_string()).unwrap(),
+                            Upstream::new("http://host2:8080".to_string()).unwrap(),
+                        ])
+                    ))
                 ))
             );
         }
@@ -1812,8 +1829,10 @@ mod tests {
                 parse_handler(input),
                 Ok((
                     "",
-                    types::Handler::Proxy(types::LoadBalancer::NoBalancer(
-                        Upstream::new("http://localhost:3000".to_string()).unwrap()
+                    types::Handler::Proxy(types::ProxyConfig::new(
+                        types::LoadBalancer::NoBalancer(
+                            Upstream::new("http://localhost:3000".to_string()).unwrap()
+                        )
                     ))
                 ))
             );
@@ -1821,13 +1840,14 @@ mod tests {
 
         #[test]
         fn test_parse_handler_proxy_block_with_timeouts() {
-            let input = "proxy { upstreams http://localhost:3000 request_timeout 20 connection_timeout 5 }";
+            let input =
+                "proxy { upstreams http://localhost:3000 request_timeout 20 connection_timeout 5 }";
             let result = parse_handler(input);
             assert!(result.is_ok());
-            
+
             let (remaining, handler) = result.unwrap();
             assert_eq!(remaining, "");
-            
+
             if let types::Handler::Proxy(proxy_config) = handler {
                 assert_eq!(proxy_config.request_timeout, Some(20));
                 assert_eq!(proxy_config.connection_timeout, Some(5));
@@ -1847,10 +1867,10 @@ mod tests {
             let input = "proxy { upstreams http://localhost:3000 request_timeout 15 }";
             let result = parse_handler(input);
             assert!(result.is_ok());
-            
+
             let (remaining, handler) = result.unwrap();
             assert_eq!(remaining, "");
-            
+
             if let types::Handler::Proxy(proxy_config) = handler {
                 assert_eq!(proxy_config.request_timeout, Some(15));
                 assert_eq!(proxy_config.connection_timeout, None);
@@ -1864,10 +1884,10 @@ mod tests {
             let input = "proxy { upstreams http://host1:8080 http://host2:8080 lb_policy round_robin request_timeout 25 connection_timeout 8 }";
             let result = parse_handler(input);
             assert!(result.is_ok());
-            
+
             let (remaining, handler) = result.unwrap();
             assert_eq!(remaining, "");
-            
+
             if let types::Handler::Proxy(proxy_config) = handler {
                 assert_eq!(proxy_config.request_timeout, Some(25));
                 assert_eq!(proxy_config.connection_timeout, Some(8));
@@ -2604,7 +2624,10 @@ mod tests {
             assert_eq!(old_route.path, "/old-proxy");
             assert!(matches!(
                 old_route.handler,
-                types::Handler::Proxy(types::LoadBalancer::NoBalancer(_))
+                types::Handler::Proxy(types::ProxyConfig {
+                    load_balancer: types::LoadBalancer::NoBalancer(_),
+                    ..
+                })
             ));
 
             // Check single upstream with comments route
@@ -2612,14 +2635,19 @@ mod tests {
             assert_eq!(single_route.path, "/single-proxy");
             assert!(matches!(
                 single_route.handler,
-                types::Handler::Proxy(types::LoadBalancer::NoBalancer(_))
+                types::Handler::Proxy(types::ProxyConfig {
+                    load_balancer: types::LoadBalancer::NoBalancer(_),
+                    ..
+                })
             ));
 
             // Check multi upstream with explicit round_robin
             let multi_route = &vh.routes[2];
             assert_eq!(multi_route.path, "/multi-proxy");
-            if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
-                &multi_route.handler
+            if let types::Handler::Proxy(types::ProxyConfig {
+                load_balancer: types::LoadBalancer::RoundRobin(upstreams),
+                ..
+            }) = &multi_route.handler
             {
                 assert_eq!(upstreams.len(), 3);
             } else {
@@ -2629,8 +2657,10 @@ mod tests {
             // Check the second multi upstream route
             let multi_route_2 = &vh.routes[3];
             assert_eq!(multi_route_2.path, "/multi-proxy-2");
-            if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
-                &multi_route_2.handler
+            if let types::Handler::Proxy(types::ProxyConfig {
+                load_balancer: types::LoadBalancer::RoundRobin(upstreams),
+                ..
+            }) = &multi_route_2.handler
             {
                 assert_eq!(upstreams.len(), 2);
             } else {
@@ -2701,8 +2731,10 @@ mod tests {
             assert_eq!(config.virtual_hosts.len(), 1);
 
             let route = &config.virtual_hosts[0].routes[0];
-            if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
-                &route.handler
+            if let types::Handler::Proxy(types::ProxyConfig {
+                load_balancer: types::LoadBalancer::RoundRobin(upstreams),
+                ..
+            }) = &route.handler
             {
                 assert_eq!(upstreams.len(), 3);
             } else {
@@ -2729,8 +2761,10 @@ mod tests {
 
             let (_, config) = result.unwrap();
             let route = &config.virtual_hosts[0].routes[0];
-            if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
-                &route.handler
+            if let types::Handler::Proxy(types::ProxyConfig {
+                load_balancer: types::LoadBalancer::RoundRobin(upstreams),
+                ..
+            }) = &route.handler
             {
                 assert_eq!(upstreams.len(), 3);
             } else {
@@ -2760,8 +2794,10 @@ mod tests {
 
             let (_, config) = result.unwrap();
             let route = &config.virtual_hosts[0].routes[0];
-            if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
-                &route.handler
+            if let types::Handler::Proxy(types::ProxyConfig {
+                load_balancer: types::LoadBalancer::RoundRobin(upstreams),
+                ..
+            }) = &route.handler
             {
                 assert_eq!(upstreams.len(), 3);
             } else {
@@ -2788,8 +2824,10 @@ mod tests {
 
             let (_, config) = result.unwrap();
             let route = &config.virtual_hosts[0].routes[0];
-            if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
-                &route.handler
+            if let types::Handler::Proxy(types::ProxyConfig {
+                load_balancer: types::LoadBalancer::RoundRobin(upstreams),
+                ..
+            }) = &route.handler
             {
                 assert_eq!(upstreams.len(), 3);
             } else {
@@ -2815,8 +2853,10 @@ mod tests {
 
             let (_, config) = result.unwrap();
             let route = &config.virtual_hosts[0].routes[0];
-            if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
-                &route.handler
+            if let types::Handler::Proxy(types::ProxyConfig {
+                load_balancer: types::LoadBalancer::RoundRobin(upstreams),
+                ..
+            }) = &route.handler
             {
                 assert_eq!(upstreams.len(), 3);
             } else {
@@ -2843,8 +2883,10 @@ mod tests {
 
             let (_, config) = result.unwrap();
             let route = &config.virtual_hosts[0].routes[0];
-            if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
-                &route.handler
+            if let types::Handler::Proxy(types::ProxyConfig {
+                load_balancer: types::LoadBalancer::RoundRobin(upstreams),
+                ..
+            }) = &route.handler
             {
                 assert_eq!(upstreams.len(), 3);
             } else {
@@ -2874,8 +2916,10 @@ mod tests {
 
             let (_, config) = result.unwrap();
             let route = &config.virtual_hosts[0].routes[0];
-            if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
-                &route.handler
+            if let types::Handler::Proxy(types::ProxyConfig {
+                load_balancer: types::LoadBalancer::RoundRobin(upstreams),
+                ..
+            }) = &route.handler
             {
                 assert_eq!(upstreams.len(), 3);
             } else {
@@ -2903,8 +2947,10 @@ mod tests {
             if result.is_ok() {
                 let (_, config) = result.unwrap();
                 let route = &config.virtual_hosts[0].routes[0];
-                if let types::Handler::Proxy(types::LoadBalancer::RoundRobin(upstreams)) =
-                    &route.handler
+                if let types::Handler::Proxy(types::ProxyConfig {
+                    load_balancer: types::LoadBalancer::RoundRobin(upstreams),
+                    ..
+                }) = &route.handler
                 {
                     assert_eq!(upstreams.len(), 3);
                     println!(
@@ -3045,12 +3091,12 @@ mod tests {
                                     },
                                     types::Route {
                                         path: "/api/**".to_string(),
-                                        handler: types::Handler::Proxy(
+                                        handler: types::Handler::Proxy(types::ProxyConfig::new(
                                             types::LoadBalancer::NoBalancer(
                                                 Upstream::new("http://localhost:3000".to_string())
                                                     .unwrap()
                                             )
-                                        ),
+                                        )),
                                         middlewares: vec![
                                             types::Middleware::Cors,
                                             types::Middleware::RateLimit(10),
@@ -3157,14 +3203,14 @@ mod tests {
                                 routes: vec![
                                     types::Route {
                                         path: "/blog/**".to_string(),
-                                        handler: types::Handler::Proxy(
+                                        handler: types::Handler::Proxy(types::ProxyConfig::new(
                                             types::LoadBalancer::NoBalancer(
                                                 Upstream::new(
                                                     "http://blog.example.com".to_string()
                                                 )
                                                 .unwrap()
                                             )
-                                        ),
+                                        )),
                                         middlewares: vec![
                                             types::Middleware::Gzip,
                                             types::Middleware::Cache("5m".to_string()),
@@ -3172,14 +3218,14 @@ mod tests {
                                     },
                                     types::Route {
                                         path: "/admin".to_string(),
-                                        handler: types::Handler::Proxy(
+                                        handler: types::Handler::Proxy(types::ProxyConfig::new(
                                             types::LoadBalancer::NoBalancer(
                                                 Upstream::new(
                                                     "http://admin.example.com".to_string()
                                                 )
                                                 .unwrap()
                                             )
-                                        ),
+                                        )),
                                         middlewares: vec![types::Middleware::Auth {
                                             username: "superuser".to_string(),
                                             password: "secret".to_string(),
@@ -3674,10 +3720,10 @@ mod tests {
 // Integration test for timeout parsing
 #[cfg(test)]
 mod timeout_integration_test {
-    use crate::types::*;
     use crate::parse_config;
+    use crate::types::*;
 
-    #[test] 
+    #[test]
     fn test_timeout_parsing_integration() {
         let config_content = r#"
 localhost {
@@ -3693,11 +3739,11 @@ localhost {
 
         let result = parse_config(config_content);
         assert!(result.is_ok());
-        
+
         let (_, config) = result.unwrap();
         let vhost = &config.virtual_hosts[0];
         let route = &vhost.routes[0];
-        
+
         match &route.handler {
             Handler::Proxy(proxy_config) => {
                 assert_eq!(proxy_config.request_timeout, Some(25));
@@ -3706,7 +3752,7 @@ localhost {
             _ => panic!("Expected proxy handler"),
         }
     }
-    
+
     #[test]
     fn test_timeout_parsing_partial() {
         let config_content = r#"
@@ -3722,11 +3768,11 @@ localhost {
 
         let result = parse_config(config_content);
         assert!(result.is_ok());
-        
+
         let (_, config) = result.unwrap();
         let vhost = &config.virtual_hosts[0];
         let route = &vhost.routes[0];
-        
+
         match &route.handler {
             Handler::Proxy(proxy_config) => {
                 assert_eq!(proxy_config.request_timeout, Some(15));
