@@ -9,7 +9,7 @@ use crate::{
         file::FileHandler, redirect::RedirectHandler, respond::RespondHandler,
         reverse_proxy::ReverseProxyHandler,
     },
-    load_balance::{node::Node, round_robin::RoundRobinBalancer, SingleUpstream},
+    load_balance::{node::Node, round_robin::RoundRobinBalancer, LoadBalance, SingleUpstream},
 };
 
 pub struct ServerPlan {
@@ -77,31 +77,26 @@ impl ServerPlan {
                         RoutePlan::File(FileHandler::new(path.clone(), r.path.clone()))
                     }
                     chico_file::types::Handler::Proxy(proxy_config) => {
-                        match &proxy_config.load_balancer {
+                        let balancer: Box<dyn LoadBalance> = match &proxy_config.load_balancer {
                             chico_file::types::LoadBalancer::NoBalancer(upstream) => {
-                                let balancer = SingleUpstream::new(Node::new(
+                                Box::new(SingleUpstream::new(Node::new(
                                     upstream.get_host_port().parse().unwrap(),
-                                ));
-                                RoutePlan::ReverseProxy(ReverseProxyHandler::with_timeouts(
-                                    Box::new(balancer),
-                                    proxy_config.request_timeout,
-                                    proxy_config.connection_timeout,
-                                ))
+                                )))
                             }
                             chico_file::types::LoadBalancer::RoundRobin(upstreams) => {
-                                let balancer = RoundRobinBalancer::new(
+                                Box::new(RoundRobinBalancer::new(
                                     upstreams
                                         .iter()
                                         .map(|u| Node::new(u.get_host_port().parse().unwrap()))
                                         .collect(),
-                                );
-                                RoutePlan::ReverseProxy(ReverseProxyHandler::with_timeouts(
-                                    Box::new(balancer),
-                                    proxy_config.request_timeout,
-                                    proxy_config.connection_timeout,
                                 ))
                             }
-                        }
+                        };
+                        RoutePlan::ReverseProxy(ReverseProxyHandler::with_timeouts(
+                            balancer,
+                            proxy_config.request_timeout,
+                            proxy_config.connection_timeout,
+                        ))
                     }
                     chico_file::types::Handler::Dir(_) => todo!(),
                     chico_file::types::Handler::Browse(_) => todo!(),
