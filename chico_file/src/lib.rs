@@ -1384,7 +1384,6 @@ mod tests {
         ))
     }
 
-    #[allow(dead_code)]
     fn proxy_round_robin(upstream_urls: Vec<&str>) -> crate::types::Handler {
         let upstreams = upstream_urls
             .into_iter()
@@ -1689,10 +1688,10 @@ mod tests {
     }
 
     mod handlers {
-        use crate::tests::proxy_single;
+        use crate::tests::{proxy_round_robin, proxy_single};
         use crate::{
             parse_handler, parse_redirect_handler_args, parse_respond_handler_args,
-            types::{self, Upstream},
+            types::{self},
         };
 
         #[test]
@@ -1727,12 +1726,7 @@ mod tests {
                 parse_handler(input),
                 Ok((
                     "",
-                    types::Handler::Proxy(types::ProxyConfig::new(
-                        types::LoadBalancer::RoundRobin(vec![
-                            Upstream::new("http://host1:8080".to_string()).unwrap(),
-                            Upstream::new("http://host2:8080".to_string()).unwrap(),
-                        ])
-                    ))
+                    proxy_round_robin(vec!["http://host1:8080", "http://host2:8080"])
                 ))
             );
         }
@@ -1744,13 +1738,11 @@ mod tests {
                 parse_handler(input),
                 Ok((
                     "",
-                    types::Handler::Proxy(types::ProxyConfig::new(
-                        types::LoadBalancer::RoundRobin(vec![
-                            Upstream::new("http://host1:8080".to_string()).unwrap(),
-                            Upstream::new("http://host2:8080".to_string()).unwrap(),
-                            Upstream::new("http://host3:8080".to_string()).unwrap(),
-                        ])
-                    ))
+                    proxy_round_robin(vec![
+                        "http://host1:8080",
+                        "http://host2:8080",
+                        "http://host3:8080"
+                    ])
                 ))
             );
         }
@@ -1760,14 +1752,7 @@ mod tests {
             let input = "proxy { upstreams http://localhost:3000\n lb_policy round_robin }";
             assert_eq!(
                 parse_handler(input),
-                Ok((
-                    "",
-                    types::Handler::Proxy(types::ProxyConfig::new(
-                        types::LoadBalancer::NoBalancer(
-                            Upstream::new("http://localhost:3000".to_string()).unwrap()
-                        )
-                    ))
-                ))
+                Ok(("", proxy_single("http://localhost:3000")))
             );
         }
 
@@ -1778,12 +1763,7 @@ mod tests {
                 parse_handler(input),
                 Ok((
                     "",
-                    types::Handler::Proxy(types::ProxyConfig::new(
-                        types::LoadBalancer::RoundRobin(vec![
-                            Upstream::new("http://host1:8080".to_string()).unwrap(),
-                            Upstream::new("http://host2:8080".to_string()).unwrap(),
-                        ])
-                    ))
+                    proxy_round_robin(vec!["http://host1:8080", "http://host2:8080"])
                 ))
             );
         }
@@ -1795,12 +1775,7 @@ mod tests {
                 parse_handler(input),
                 Ok((
                     "",
-                    types::Handler::Proxy(types::ProxyConfig::new(
-                        types::LoadBalancer::RoundRobin(vec![
-                            Upstream::new("http://host1:8080".to_string()).unwrap(),
-                            Upstream::new("http://host2:8080".to_string()).unwrap(),
-                        ])
-                    ))
+                    proxy_round_robin(vec!["http://host1:8080", "http://host2:8080"])
                 ))
             );
         }
@@ -1812,12 +1787,7 @@ mod tests {
                 parse_handler(input),
                 Ok((
                     "",
-                    types::Handler::Proxy(types::ProxyConfig::new(
-                        types::LoadBalancer::RoundRobin(vec![
-                            Upstream::new("http://host1:8080".to_string()).unwrap(),
-                            Upstream::new("http://host2:8080".to_string()).unwrap(),
-                        ])
-                    ))
+                    proxy_round_robin(vec!["http://host1:8080", "http://host2:8080"])
                 ))
             );
         }
@@ -1827,14 +1797,7 @@ mod tests {
             let input = "proxy {\n  # This is a comment\n  upstreams http://localhost:3000\n  # Another comment\n}";
             assert_eq!(
                 parse_handler(input),
-                Ok((
-                    "",
-                    types::Handler::Proxy(types::ProxyConfig::new(
-                        types::LoadBalancer::NoBalancer(
-                            Upstream::new("http://localhost:3000".to_string()).unwrap()
-                        )
-                    ))
-                ))
+                Ok(("", proxy_single("http://localhost:3000")))
             );
         }
 
@@ -3717,9 +3680,8 @@ mod tests {
     }
 }
 
-// Integration test for timeout parsing
 #[cfg(test)]
-mod timeout_integration_test {
+mod timeout_test {
     use crate::parse_config;
     use crate::types::*;
 
