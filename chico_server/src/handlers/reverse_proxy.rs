@@ -14,13 +14,39 @@ use crate::{
 
 pub struct ReverseProxyHandler {
     load_balancer: Box<dyn crate::load_balance::LoadBalance>,
+    request_timeout: Duration,
+    connection_timeout: Duration,
 }
 
 #[allow(dead_code)]
 impl ReverseProxyHandler {
+    const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+    const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
+
     pub fn new(load_balancer: Box<dyn crate::load_balance::LoadBalance>) -> Self {
-        Self { load_balancer }
+        Self {
+            load_balancer,
+            request_timeout: ReverseProxyHandler::DEFAULT_REQUEST_TIMEOUT,
+            connection_timeout: ReverseProxyHandler::DEFAULT_CONNECTION_TIMEOUT,
+        }
     }
+
+    pub fn with_timeouts(
+        load_balancer: Box<dyn crate::load_balance::LoadBalance>,
+        request_timeout: Option<u64>,
+        connection_timeout: Option<u64>,
+    ) -> Self {
+        Self {
+            load_balancer,
+            request_timeout: request_timeout
+                .map(Duration::from_secs)
+                .unwrap_or(ReverseProxyHandler::DEFAULT_REQUEST_TIMEOUT),
+            connection_timeout: connection_timeout
+                .map(Duration::from_secs)
+                .unwrap_or(ReverseProxyHandler::DEFAULT_CONNECTION_TIMEOUT),
+        }
+    }
+
     fn get_node(&self) -> Option<Arc<Node>> {
         self.load_balancer.get_node()
     }
@@ -38,16 +64,32 @@ impl RequestHandler for ReverseProxyHandler {
         debug!("start connect to upstream");
         let upstream = self.get_node().unwrap();
         let host_and_port = upstream.addr;
-        let connect_result = TcpStream::connect(host_and_port).await;
 
-        let Ok(client_stream) = connect_result else {
-            let err = connect_result.err().unwrap();
-            error!("could not connect to upstream server. Given upstream : {upstream} - Error : {error}" , upstream  = host_and_port, error= err);
-            return RespondHandler::bad_gateway_with_body(
-                "502 Bad Gateway - could not connect to upstream server.".to_string(),
-            )
-            .handle(request)
-            .await;
+        // Apply connection timeout
+        let connect_result =
+            tokio::time::timeout(self.connection_timeout, TcpStream::connect(host_and_port)).await;
+
+        let client_stream = match connect_result {
+            Ok(Ok(stream)) => stream,
+            Ok(Err(err)) => {
+                error!("could not connect to upstream server. Given upstream : {upstream} - Error : {error}" , upstream  = host_and_port, error= err);
+                return RespondHandler::bad_gateway_with_body(
+                    "502 Bad Gateway - could not connect to upstream server.".to_string(),
+                )
+                .handle(request)
+                .await;
+            }
+            Err(_) => {
+                error!(
+                    "Connection timeout while connecting to upstream server: {}",
+                    host_and_port
+                );
+                return RespondHandler::bad_gateway_with_body(
+                    "502 Bad Gateway - connection timeout to upstream server.".to_string(),
+                )
+                .handle(request)
+                .await;
+            }
         };
         debug!("connected to upstream");
 
@@ -96,8 +138,8 @@ impl RequestHandler for ReverseProxyHandler {
 
         debug!("start sending request");
 
-        let timeout = Duration::from_secs(5); //todo: make this configurable
-        let timeout_result = tokio::time::timeout(timeout, sender.send_request(request)).await;
+        let timeout_result =
+            tokio::time::timeout(self.request_timeout, sender.send_request(request)).await;
 
         let response = match timeout_result {
             Ok(Ok(response)) => response,

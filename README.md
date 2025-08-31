@@ -129,6 +129,44 @@ The `lb_policy` supports:
 
 When multiple upstreams are specified without `lb_policy`, it defaults to `round_robin`.
 
+**Proxy with Timeout Configuration:**
+```
+route /api/* {
+    proxy {
+        upstreams http://backend1:8080 http://backend2:8080
+        lb_policy round_robin
+        request_timeout 30
+        connection_timeout 10
+    }
+}
+```
+
+**Timeout Configuration Options:**
+- `request_timeout` (seconds): Maximum time to wait for a response from the upstream server (default: 30 seconds)
+- `connection_timeout` (seconds): Maximum time to wait when establishing a connection to the upstream server (default: 10 seconds)
+
+Both timeout options are optional and can be configured independently:
+```
+# Only request timeout
+proxy {
+    upstreams http://backend:8080
+    request_timeout 15
+}
+
+# Only connection timeout  
+proxy {
+    upstreams http://backend:8080
+    connection_timeout 5
+}
+
+# Both timeouts
+proxy {
+    upstreams http://backend:8080
+    request_timeout 25
+    connection_timeout 8
+}
+```
+
 ### Testing
 
 To run the tests, use the following command:
