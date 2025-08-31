@@ -20,11 +20,14 @@ pub struct ReverseProxyHandler {
 
 #[allow(dead_code)]
 impl ReverseProxyHandler {
+    const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+    const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
+
     pub fn new(load_balancer: Box<dyn crate::load_balance::LoadBalance>) -> Self {
         Self {
             load_balancer,
-            request_timeout: Duration::from_secs(30), // default 30 seconds
-            connection_timeout: Duration::from_secs(10), // default 10 seconds
+            request_timeout: ReverseProxyHandler::DEFAULT_REQUEST_TIMEOUT,
+            connection_timeout: ReverseProxyHandler::DEFAULT_CONNECTION_TIMEOUT,
         }
     }
 
@@ -35,8 +38,12 @@ impl ReverseProxyHandler {
     ) -> Self {
         Self {
             load_balancer,
-            request_timeout: Duration::from_secs(request_timeout.unwrap_or(30)),
-            connection_timeout: Duration::from_secs(connection_timeout.unwrap_or(10)),
+            request_timeout: request_timeout
+                .map(Duration::from_secs)
+                .unwrap_or(ReverseProxyHandler::DEFAULT_REQUEST_TIMEOUT),
+            connection_timeout: connection_timeout
+                .map(Duration::from_secs)
+                .unwrap_or(ReverseProxyHandler::DEFAULT_CONNECTION_TIMEOUT),
         }
     }
 
