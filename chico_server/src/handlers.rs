@@ -100,33 +100,52 @@ pub struct UtilitiesResponses;
 
 #[allow(dead_code)]
 impl UtilitiesResponses {
-    pub fn not_found_respond_handler() -> RespondHandler {
-        let body = r"<!DOCTYPE html>  
-<html>  
-<head>  
-    <title>404 Not Found</title>  
-</head>  
-<body>  
-    <h1>404 Not Found</h1>  
-</body>  
-</html>";
+    /// Creates a unified HTML error response with proper formatting and headers
+    fn create_html_error_response(
+        status_code: u16,
+        error_title: &str,
+        error_message: &str,
+    ) -> RespondHandler {
+        let body = format!(
+            r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>{} {}</title>
+</head>
+<body>
+    <h1>{} {}</h1>
+    <p>{}</p>
+</body>
+</html>"#,
+            status_code, error_title, status_code, error_title, error_message
+        );
 
         let mut set_headers = HashMap::new();
         set_headers.insert(
             hyper::header::CONTENT_TYPE.to_string(),
             "text/html; charset=utf-8".to_string(),
         );
-        RespondHandler::with_headers(404, Some(body.to_string()), set_headers)
+        RespondHandler::with_headers(status_code, Some(body), set_headers)
+    }
+
+    pub fn not_found_respond_handler() -> RespondHandler {
+        Self::create_html_error_response(
+            404,
+            "Not Found",
+            "The requested resource could not be found on this server.",
+        )
     }
 
     pub fn bad_request_host_header_not_found_respond_handler() -> RespondHandler {
-        let body = "Host header is missing in the request.";
-        RespondHandler::bad_request_with_body(String::from(body))
+        Self::create_html_error_response(
+            400,
+            "Bad Request",
+            "Host header is missing in the request.",
+        )
     }
 
     pub fn bad_request_invalid_host_header_respond_handler() -> RespondHandler {
-        let body = "Invalid Host header.";
-        RespondHandler::bad_request_with_body(String::from(body))
+        Self::create_html_error_response(400, "Bad Request", "Invalid Host header.")
     }
 }
 
@@ -176,14 +195,15 @@ mod tests {
                 .to_vec(),
         )
         .unwrap();
-        let body = r"<!DOCTYPE html>  
-<html>  
-<head>  
-    <title>404 Not Found</title>  
-</head>  
-<body>  
-    <h1>404 Not Found</h1>  
-</body>  
+        let body = r"<!DOCTYPE html>
+<html>
+<head>
+    <title>404 Not Found</title>
+</head>
+<body>
+    <h1>404 Not Found</h1>
+    <p>The requested resource could not be found on this server.</p>
+</body>
 </html>";
         assert_eq!(response_body, body);
     }
@@ -224,14 +244,15 @@ mod tests {
                 .to_vec(),
         )
         .unwrap();
-        let body = r"<!DOCTYPE html>  
-<html>  
-<head>  
-    <title>404 Not Found</title>  
-</head>  
-<body>  
-    <h1>404 Not Found</h1>  
-</body>  
+        let body = r"<!DOCTYPE html>
+<html>
+<head>
+    <title>404 Not Found</title>
+</head>
+<body>
+    <h1>404 Not Found</h1>
+    <p>The requested resource could not be found on this server.</p>
+</body>
 </html>";
         assert_eq!(response_body, body);
     }
@@ -268,7 +289,16 @@ mod tests {
                 .to_vec(),
         )
         .unwrap();
-        let body = r"Host header is missing in the request.";
+        let body = r"<!DOCTYPE html>
+<html>
+<head>
+    <title>400 Bad Request</title>
+</head>
+<body>
+    <h1>400 Bad Request</h1>
+    <p>Host header is missing in the request.</p>
+</body>
+</html>";
         assert_eq!(response_body, body);
     }
 
@@ -310,7 +340,16 @@ mod tests {
                 .to_vec(),
         )
         .unwrap();
-        let body = r"Invalid Host header.";
+        let body = r"<!DOCTYPE html>
+<html>
+<head>
+    <title>400 Bad Request</title>
+</head>
+<body>
+    <h1>400 Bad Request</h1>
+    <p>Invalid Host header.</p>
+</body>
+</html>";
         assert_eq!(response_body, body);
     }
 }

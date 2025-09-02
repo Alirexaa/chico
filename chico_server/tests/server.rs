@@ -297,14 +297,15 @@ mod serial_integration {
         let response = reqwest::get("http://localhost:3000/blog").await;
         app.stop_app();
 
-        let body = r"<!DOCTYPE html>  
-<html>  
-<head>  
-    <title>404 Not Found</title>  
-</head>  
-<body>  
-    <h1>404 Not Found</h1>  
-</body>  
+        let body = r"<!DOCTYPE html>
+<html>
+<head>
+    <title>404 Not Found</title>
+</head>
+<body>
+    <h1>404 Not Found</h1>
+    <p>The requested resource could not be found on this server.</p>
+</body>
 </html>";
 
         let response = response.unwrap();
@@ -322,14 +323,15 @@ mod serial_integration {
         app.wait_for_start();
         let response = reqwest::get("http://127.0.0.1:3000").await;
         app.stop_app();
-        let body = r"<!DOCTYPE html>  
-<html>  
-<head>  
-    <title>404 Not Found</title>  
-</head>  
-<body>  
-    <h1>404 Not Found</h1>  
-</body>  
+        let body = r"<!DOCTYPE html>
+<html>
+<head>
+    <title>404 Not Found</title>
+</head>
+<body>
+    <h1>404 Not Found</h1>
+    <p>The requested resource could not be found on this server.</p>
+</body>
 </html>";
 
         let response = response.unwrap();
@@ -436,7 +438,19 @@ mod serial_integration {
 
         let response = response.unwrap();
         assert_eq!(&response.status(), &StatusCode::NOT_FOUND);
-        assert_eq!(&response.text().await.unwrap(), "");
+        assert_eq!(
+            &response.text().await.unwrap(),
+            "<!DOCTYPE html>
+<html>
+<head>
+    <title>404 Not Found</title>
+</head>
+<body>
+    <h1>404 Not Found</h1>
+    <p>The requested resource could not be found on this server.</p>
+</body>
+</html>"
+        );
     }
 
     #[tokio::test]
