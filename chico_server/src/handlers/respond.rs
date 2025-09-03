@@ -500,9 +500,15 @@ mod tests {
             ("400 Bad Request", RespondHandler::bad_request()),
             ("403 Forbidden", RespondHandler::forbidden()),
             ("404 Not Found", RespondHandler::not_found()),
-            ("500 Internal Server Error", RespondHandler::internal_server_error()),
+            (
+                "500 Internal Server Error",
+                RespondHandler::internal_server_error(),
+            ),
             ("502 Bad Gateway", RespondHandler::bad_gateway()),
-            ("416 Range Not Satisfiable", RespondHandler::range_not_satisfiable()),
+            (
+                "416 Range Not Satisfiable",
+                RespondHandler::range_not_satisfiable(),
+            ),
         ];
 
         for (name, handler) in error_handlers {
@@ -511,7 +517,11 @@ mod tests {
 
             // Check that content-type header is set correctly
             let content_type = response.headers().get("content-type").unwrap();
-            assert_eq!(content_type, "text/html; charset=utf-8", "Failed for {}", name);
+            assert_eq!(
+                content_type, "text/html; charset=utf-8",
+                "Failed for {}",
+                name
+            );
 
             // Check that the response body contains HTML
             let body = String::from_utf8(
@@ -524,16 +534,36 @@ mod tests {
                     .to_vec(),
             )
             .unwrap();
-            
-            assert!(body.contains("<!DOCTYPE html>"), "Missing DOCTYPE for {}", name);
+
+            assert!(
+                body.contains("<!DOCTYPE html>"),
+                "Missing DOCTYPE for {}",
+                name
+            );
             assert!(body.contains("<html>"), "Missing html tag for {}", name);
             assert!(body.contains("<head>"), "Missing head tag for {}", name);
             assert!(body.contains("<title>"), "Missing title tag for {}", name);
-            assert!(body.contains("</title>"), "Missing closing title tag for {}", name);
-            assert!(body.contains("</head>"), "Missing closing head tag for {}", name);
+            assert!(
+                body.contains("</title>"),
+                "Missing closing title tag for {}",
+                name
+            );
+            assert!(
+                body.contains("</head>"),
+                "Missing closing head tag for {}",
+                name
+            );
             assert!(body.contains("<body>"), "Missing body tag for {}", name);
-            assert!(body.contains("</body>"), "Missing closing body tag for {}", name);
-            assert!(body.contains("</html>"), "Missing closing html tag for {}", name);
+            assert!(
+                body.contains("</body>"),
+                "Missing closing body tag for {}",
+                name
+            );
+            assert!(
+                body.contains("</html>"),
+                "Missing closing html tag for {}",
+                name
+            );
         }
     }
 
@@ -543,7 +573,10 @@ mod tests {
             (RespondHandler::bad_request(), "400 Bad Request"),
             (RespondHandler::forbidden(), "403 Forbidden"),
             (RespondHandler::not_found(), "404 Not Found"),
-            (RespondHandler::internal_server_error(), "500 Internal Server Error"),
+            (
+                RespondHandler::internal_server_error(),
+                "500 Internal Server Error",
+            ),
             (RespondHandler::bad_gateway(), "502 Bad Gateway"),
         ];
 
@@ -562,10 +595,18 @@ mod tests {
             )
             .unwrap();
 
-            assert!(body.contains(&format!("<title>{}</title>", expected_title)), 
-                    "Title should contain '{}' but got body: {}", expected_title, body);
-            assert!(body.contains(&format!("<h1>{}</h1>", expected_title)), 
-                    "H1 should contain '{}' but got body: {}", expected_title, body);
+            assert!(
+                body.contains(&format!("<title>{}</title>", expected_title)),
+                "Title should contain '{}' but got body: {}",
+                expected_title,
+                body
+            );
+            assert!(
+                body.contains(&format!("<h1>{}</h1>", expected_title)),
+                "H1 should contain '{}' but got body: {}",
+                expected_title,
+                body
+            );
         }
     }
 }
