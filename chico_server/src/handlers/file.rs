@@ -535,7 +535,19 @@ mod tests {
                 .to_vec(),
         )
         .unwrap();
-        assert_eq!(response_body, "");
+        assert_eq!(
+            response_body,
+            "<!DOCTYPE html>
+<html>
+<head>
+    <title>404 Not Found</title>
+</head>
+<body>
+    <h1>404 Not Found</h1>
+    <p>The requested resource could not be found on this server.</p>
+</body>
+</html>"
+        );
     }
 
     #[tokio::test]
@@ -561,7 +573,19 @@ mod tests {
                 .to_vec(),
         )
         .unwrap();
-        assert_eq!(response_body, "");
+        assert_eq!(
+            response_body,
+            "<!DOCTYPE html>
+<html>
+<head>
+    <title>403 Forbidden</title>
+</head>
+<body>
+    <h1>403 Forbidden</h1>
+    <p>You don't have permission to access this resource.</p>
+</body>
+</html>"
+        );
     }
 
     #[tokio::test]

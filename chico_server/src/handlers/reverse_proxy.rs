@@ -8,7 +8,7 @@ use tokio::net::TcpStream;
 use tracing::{debug, error, info_span};
 
 use crate::{
-    handlers::{respond::RespondHandler, BoxBody, RequestHandler},
+    handlers::{respond::RespondHandler, RequestHandler},
     load_balance::node::Node,
 };
 
@@ -145,15 +145,11 @@ impl RequestHandler for ReverseProxyHandler {
             Ok(Ok(response)) => response,
             Ok(Err(err)) => {
                 error!("Error sending request to upstream: {:?}", err);
-                return bad_gateway_response(
-                    "502 Bad Gateway - error sending request.".to_string(),
-                );
+                return bad_gateway_response("Error sending request to upstream server.");
             }
             Err(_) => {
                 error!("Timeout while sending request to upstream.");
-                return gateway_timeout_response(
-                    "504 Gateway Timeout - upstream did not respond in time.".to_string(),
-                );
+                return gateway_timeout_response("Upstream did not respond in time.");
             }
         };
 
@@ -168,16 +164,46 @@ impl RequestHandler for ReverseProxyHandler {
     }
 }
 
-fn bad_gateway_response(body: String) -> Response<BoxBody> {
+fn bad_gateway_response(message: &str) -> Response<super::BoxBody> {
+    let body = format!(
+        r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>502 Bad Gateway</title>
+</head>
+<body>
+    <h1>502 Bad Gateway</h1>
+    <p>{}</p>
+</body>
+</html>"#,
+        message
+    );
+
     http::Response::builder()
         .status(502)
+        .header(hyper::header::CONTENT_TYPE, "text/html; charset=utf-8")
         .body(crate::handlers::full(body))
         .unwrap()
 }
 
-fn gateway_timeout_response(body: String) -> Response<BoxBody> {
+fn gateway_timeout_response(message: &str) -> Response<super::BoxBody> {
+    let body = format!(
+        r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>504 Gateway Timeout</title>
+</head>
+<body>
+    <h1>504 Gateway Timeout</h1>
+    <p>{}</p>
+</body>
+</html>"#,
+        message
+    );
+
     http::Response::builder()
         .status(504)
+        .header(hyper::header::CONTENT_TYPE, "text/html; charset=utf-8")
         .body(crate::handlers::full(body))
         .unwrap()
 }
