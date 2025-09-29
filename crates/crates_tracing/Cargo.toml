@@ -14,7 +14,7 @@ directories = "6.0.0"
 tracing-opentelemetry = "0.31"
 opentelemetry = { version = "0.30" }
 opentelemetry-jaeger = "0.22"
-opentelemetry-otlp = {version = "0.30" , features = ["grpc-tonic"]}
+opentelemetry-otlp = {version = "0.31" , features = ["grpc-tonic"]}
 opentelemetry_sdk = "0.30"
 [lints]
 workspace = true
