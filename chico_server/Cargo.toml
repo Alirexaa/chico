@@ -24,7 +24,7 @@ crates_uri ={ version = "0.1.0", path = "../crates/crates_uri"}
 tracing = { version = "0.1.41" }
 
 [dev-dependencies]
-axum = "0.8.4"
+axum = "0.8.6"
 rstest = "0.26.1"
 assert_cmd = "2.0"
 tempfile = "3"
